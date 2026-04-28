@@ -78,10 +78,10 @@ def load_mock_data():
     
     # Generate data
     data = []
-    base_date = datetime.now() - timedelta(days=365)
+    base_date = datetime.now() - timedelta(days=365*3)
     
     for i, (fund, classification) in enumerate(zip(funds, classifications)):
-        for day in range(365):
+        for day in range(365*3):
             date = base_date + timedelta(days=day)
             
             # Skip weekends
@@ -189,7 +189,7 @@ def main():
     
     # Load data
     @st.cache_data
-    def get_data(v="1.7"):
+    def get_data(v="1.8"):
         df = load_mock_data()
         # Initialiser le pipeline de sentiment (CamemBERT / BERT)
         sentiment_pipeline = NewsSentimentPipeline()
@@ -207,7 +207,7 @@ def main():
         df = sentiment_pipeline.merge_with_opcvm(df, df_agg)
         return df, df_news
     
-    df, df_news = get_data(v="1.7")
+    df, df_news = get_data(v="1.8")
     
     # Sidebar
     st.sidebar.header("Filtres")
