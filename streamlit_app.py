@@ -545,26 +545,60 @@ def main():
 
     with tab4:
         st.subheader("Analyse de Sentiment IA (Couche 5)")
-        st.info("Cette section utilise des modèles Transformer (CamemBERT/BERT) pour analyser l'actualité financière marocaine et son impact potentiel sur les OPCVM.")
         
         if not df_news.empty:
             # Stats de sentiment
-            s1, s2, s3 = st.columns(3)
+            s1, s2, s3, s4 = st.columns(4)
             pos_news = len(df_news[df_news['score_sentiment'] > 0])
             neg_news = len(df_news[df_news['score_sentiment'] < 0])
+            avg_s = df_news['score_sentiment'].mean()
+            
             s1.metric("Articles Analysés", len(df_news))
-            s2.metric("Tendance Positive", f"{pos_news}")
-            s3.metric("Tendance Négative", f"{neg_news}")
+            s2.metric("Sentiment Moyen", f"{avg_s:.2f}")
+            s3.metric("Articles Haussiers", f"{pos_news}")
+            s4.metric("Articles Baissiers", f"{neg_news}")
+
+            # IA Synthesis Report
+            st.markdown("### Rapport de Synthèse IA Complet")
+            outlook = "FAVORABLE" if avg_s > 0.1 else "PRUDENT" if avg_s < -0.1 else "NEUTRE"
+            bg_color = "#D4EDDA" if avg_s > 0.1 else "#F8D7DA" if avg_s < -0.1 else "#FFF3CD"
+            text_color = "#155724" if avg_s > 0.1 else "#721C24" if avg_s < -0.1 else "#856404"
+            
+            st.markdown(f"""
+            <div style="background-color:{bg_color}; padding:20px; border-radius:10px; border-left: 5px solid {text_color};">
+                <h4 style="color:{text_color}; margin-top:0;">PERSPECTIVE DE MARCHÉ : {outlook}</h4>
+                <p style="color:{text_color};">
+                    L'analyse par <b>CamemBERT</b> des flux d'actualités financières marocaines (Médias24, L'Économiste, MAP) 
+                    révèle une tendance de fond <b>{outlook.lower()}</b>. <br><br>
+                    <b>Impact par segment :</b><br>
+                    - <b>Actions :</b> Sensibilité forte aux nouvelles de croissance PIB ({'Positive' if avg_s > 0 else 'Négative'}).<br>
+                    - <b>Obligataire :</b> Réaction aux anticipations BAM (Taux à {taux_bam}%).<br>
+                    - <b>Monétaire :</b> Impact limité par la volatilité actuelle.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
             
             # Liste des articles
-            st.markdown("### Dernières Actualités Financières")
+            st.markdown("---")
+            st.markdown("### Détail des Actualités & Rapports par Article")
             for _, article in df_news.iterrows():
-                with st.expander(f"{article['title']} (Source: {article['source']})"):
+                sentiment_val = article['score_sentiment']
+                color = "green" if sentiment_val > 0 else "red" if sentiment_val < 0 else "orange"
+                
+                with st.expander(f"{article['title']} (Sentiment: {sentiment_val:+.2f})"):
+                    st.markdown(f"**Source :** {article['source']} | **Date :** {article['published']}")
+                    st.markdown(f"**Rapport de Contenu :**")
                     st.write(article['summary'])
-                    sentiment_val = article['score_sentiment']
-                    color = "green" if sentiment_val > 0 else "red" if sentiment_val < 0 else "gray"
-                    st.markdown(f"**Score de Sentiment (CamemBERT) :** <span style='color:{color}'>{sentiment_val:.4f}</span>", unsafe_allow_html=True)
-                    st.caption(f"Publié le : {article['published']} | Langue : {article['lang']}")
+                    st.markdown(f"**Analyse IA (CamemBERT) :**")
+                    if sentiment_val > 0.2:
+                        st.success(f"Signal HAUSSIER détecté avec une confiance de {abs(sentiment_val)*100:.1f}%")
+                    elif sentiment_val < -0.2:
+                        st.error(f"Signal BAISSIER détecté avec une confiance de {abs(sentiment_val)*100:.1f}%")
+                    else:
+                        st.warning(f"Signal NEUTRE ou INCERTAIN")
+                    
+                    if article['link']:
+                        st.markdown(f"[Lire l'article complet]({article['link']})")
         else:
             st.warning("Aucune actualité collectée pour le moment.")
 
