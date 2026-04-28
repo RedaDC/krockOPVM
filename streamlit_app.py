@@ -189,17 +189,22 @@ def main():
     
     # Load data
     @st.cache_data
-    def get_data(v="1.4"):
+    def get_data(v="1.5"):
         df = load_mock_data()
         # Initialiser le pipeline de sentiment (CamemBERT / BERT)
         sentiment_pipeline = NewsSentimentPipeline()
-        # Pour la démo, on utilise des news générées réalistes si pas de flux RSS
-        df_news = sentiment_pipeline.generate_mock_news(n_articles=15)
+        # Collecter les VRAIES news depuis les flux RSS
+        df_news = sentiment_pipeline.collect_news_rss()
+        
+        # Si vraiment vide (erreur réseau), fallback sécurisé
+        if df_news.empty:
+            df_news = sentiment_pipeline.generate_mock_news(n_articles=10)
+            
         df_agg = sentiment_pipeline.aggregate_by_classification(df_news, df)
         df = sentiment_pipeline.merge_with_opcvm(df, df_agg)
         return df, df_news
     
-    df, df_news = get_data(v="1.4")
+    df, df_news = get_data(v="1.5")
     
     # Sidebar
     st.sidebar.header("Filtres")
