@@ -358,11 +358,65 @@ def main():
         st.subheader("Prédictions Macro-Économiques")
         st.markdown("Uploadez l'historique ASFIM et saisissez les données macro pour obtenir une projection des VL.")
         
+        uploaded_file = st.file_uploader("Fichier Historique (CSV/Excel)", type=["csv", "xlsx"])
+        
+        # Traitement du fichier avant l'affichage des colonnes pour récupérer la liste des fonds
+        if uploaded_file is not None:
+            try:
+                if uploaded_file.name.endswith('.csv'):
+                    df_asfim = pd.read_csv(uploaded_file)
+                else:
+                    df_asfim = pd.read_excel(uploaded_file)
+                    if len(df_asfim.columns) > 0 and 'Tableau des performances' in str(df_asfim.columns[0]):
+                        df_asfim = pd.read_excel(uploaded_file, header=1)
+                        
+                col_mapping = {'OPCVM': 'nom_fonds', 'Classification': 'classification', 'VL': 'vl_jour'}
+                rename_dict = {}
+                for col in df_asfim.columns:
+                    for k, v in col_mapping.items():
+                        if str(k).lower() == str(col).lower().strip():
+                            rename_dict[col] = v
+                if rename_dict:
+                    df_asfim = df_asfim.rename(columns=rename_dict)
+                    
+                uploaded_cols_lower = [str(col).lower() for col in df_asfim.columns]
+                
+                if 'date' not in uploaded_cols_lower:
+                    import re
+                    date_match = re.search(r'(\d{1,2})[ _-]([a-zA-Z]+|\d{1,2})[ _-](\d{4})', uploaded_file.name)
+                    if date_match:
+                        try:
+                            day, month_str, year = date_match.groups()
+                            months_fr = {'janvier': '01', 'février': '02', 'fevrier': '02', 'mars': '03', 'avril': '04', 'mai': '05', 'juin': '06', 'juillet': '07', 'août': '08', 'aout': '08', 'septembre': '09', 'octobre': '10', 'novembre': '11', 'décembre': '12', 'decembre': '12'}
+                            month = months_fr.get(month_str.lower(), month_str) if not month_str.isdigit() else month_str
+                            df_asfim['date'] = pd.to_datetime(f"{year}-{month}-{day}")
+                        except:
+                            df_asfim['date'] = pd.Timestamp.now().normalize()
+                    else:
+                        df_asfim['date'] = pd.Timestamp.now().normalize()
+                        
+                df_asfim.columns = [str(col).lower() for col in df_asfim.columns]
+                req_cols = ['date', 'nom_fonds', 'classification', 'vl_jour']
+                missing = [c for c in req_cols if c not in df_asfim.columns]
+                
+                if missing:
+                    st.warning(f"Le fichier uploadé ne contient pas les colonnes requises ({', '.join(missing)}). Utilisation des données par défaut.")
+                    df_to_predict = df_filtered.copy()
+                else:
+                    df_to_predict = df_asfim.copy()
+            except Exception as e:
+                st.error(f"Erreur de lecture: {e}")
+                df_to_predict = df_filtered.copy()
+        else:
+            df_to_predict = df_filtered.copy()
+        
         col_m1, col_m2 = st.columns([1, 2])
         
         with col_m1:
-            st.markdown("### 1. Données ASFIM")
-            uploaded_file = st.file_uploader("Fichier Historique (CSV/Excel)", type=["csv", "xlsx"])
+            st.markdown("### 1. Sélection du Fonds")
+            macro_funds = sorted(df_to_predict['nom_fonds'].dropna().unique())
+            default_idx = macro_funds.index(selected_fund) if selected_fund in macro_funds else 0
+            selected_fund_macro = st.selectbox("Fonds à analyser", options=macro_funds, index=default_idx if macro_funds else 0)
             
             st.markdown("### 2. Paramètres Macro")
             taux_bam = st.number_input("Taux Directeur BAM (%)", value=2.75, step=0.25)
@@ -376,50 +430,24 @@ def main():
             predict_btn = st.button("Lancer la Prédiction", type="primary")
             
         with col_m2:
-            if uploaded_file is not None:
-                # Load data
-                try:
-                    if uploaded_file.name.endswith('.csv'):
-                        df_asfim = pd.read_csv(uploaded_file)
-                    else:
-                        df_asfim = pd.read_excel(uploaded_file)
-                        
-                    # Standardize columns if possible
-                    # Fallback to default mock data if required columns not found
-                    req_cols = ['date', 'nom_fonds', 'classification', 'vl_jour']
-                    # Convert uploaded columns to lower
-                    uploaded_cols_lower = [str(col).lower() for col in df_asfim.columns]
-                    
-                    missing = [c for c in req_cols if c not in uploaded_cols_lower]
-                    
-                    if missing:
-                        st.warning(f"Le fichier uploadé ne contient pas les colonnes standards ({', '.join(missing)}). Utilisation des données filtrées du tableau de bord pour la démonstration.")
-                        df_to_predict = df_filtered.copy()
-                    else:
-                        df_to_predict = df_asfim.copy()
-                        df_to_predict.columns = uploaded_cols_lower
-                except Exception as e:
-                    st.error(f"Erreur de lecture: {e}")
-                    df_to_predict = df_filtered.copy()
-            else:
+            if uploaded_file is None:
                 st.info("Aucun fichier uploadé. Utilisation des données du tableau de bord par défaut.")
-                df_to_predict = df_filtered.copy()
                 
             if predict_btn:
                 with st.spinner("Analyse macro-économique et prédiction en cours..."):
                     predictor = MacroPredictor()
                     df_pred = predictor.predict(df_to_predict, taux_bam, courbe_taux, anticipations_text, days_ahead=30)
                     
-                    if not df_pred.empty and selected_fund:
-                        st.markdown(f"### Trajectoire Prédite: {selected_fund}")
+                    if not df_pred.empty and selected_fund_macro:
+                        st.markdown(f"### Trajectoire Prédite: {selected_fund_macro}")
                         
-                        df_plot = df_pred[df_pred['nom_fonds'] == selected_fund].copy()
+                        df_plot = df_pred[df_pred['nom_fonds'] == selected_fund_macro].copy()
                         
                         if df_plot.empty:
-                            st.warning(f"Aucune donnée pour le fonds {selected_fund}.")
+                            st.warning(f"Aucune donnée pour le fonds {selected_fund_macro}.")
                         else:
                             fig = px.line(df_plot, x='date', y='vl_jour', color='type',
-                                          title=f"Impact Macro sur la VL (30 jours) - {selected_fund}",
+                                          title=f"Impact Macro sur la VL (30 jours) - {selected_fund_macro}",
                                           color_discrete_map={"Historique": "blue", "Prédiction": "red"},
                                           line_dash='type')
                                           
