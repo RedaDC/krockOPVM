@@ -195,8 +195,27 @@ def main():
     )
     
     # Date range
-    min_date = pd.to_datetime(df_filtered['date']).min()
-    max_date = pd.to_datetime(df_filtered['date']).max()
+    if df_filtered.empty:
+        min_date = datetime.now() - timedelta(days=30)
+        max_date = datetime.now()
+    else:
+        min_date = pd.to_datetime(df_filtered['date']).min()
+        max_date = pd.to_datetime(df_filtered['date']).max()
+        
+    if pd.isna(min_date) or pd.isna(max_date):
+        min_date = datetime.now() - timedelta(days=30)
+        max_date = datetime.now()
+        
+    # Convert pandas Timestamp to standard datetime.date to avoid Streamlit errors
+    if hasattr(min_date, 'to_pydatetime'):
+        min_date = min_date.to_pydatetime().date()
+    elif hasattr(min_date, 'date'):
+        min_date = min_date.date()
+        
+    if hasattr(max_date, 'to_pydatetime'):
+        max_date = max_date.to_pydatetime().date()
+    elif hasattr(max_date, 'date'):
+        max_date = max_date.date()
     
     start_date = st.sidebar.date_input("Date debut", min_date)
     end_date = st.sidebar.date_input("Date fin", max_date)
