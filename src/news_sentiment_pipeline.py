@@ -343,8 +343,12 @@ class NewsSentimentPipeline:
             df_opcvm['sources_actus'] = ''
             return df_opcvm
         
+        # Drop existing columns if they exist to avoid merge conflicts (suffixes)
+        cols_to_drop = [c for c in ['score_sentiment_moyen_jour', 'nb_actus_jour', 'sources_actus'] if c in df_opcvm.columns]
+        df_opcvm_clean = df_opcvm.drop(columns=cols_to_drop)
+        
         # Fusion sur classification
-        df_enriched = df_opcvm.merge(
+        df_enriched = df_opcvm_clean.merge(
             df_sentiment_agg[['classification', 'score_sentiment_moyen_jour', 'nb_actus_jour', 'sources_actus']],
             on='classification',
             how='left'
