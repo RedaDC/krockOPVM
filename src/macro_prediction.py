@@ -1,14 +1,17 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
+from scipy import stats
 
 class MacroPredictor:
     """
     Predicts OPCVM VLs based on historical data and macro-economic factors.
     """
-    def __init__(self):
+    def __init__(self, df_macro=None):
         self.risk_keywords = ["incertitude", "volatilité", "décroche", "restrictive", "risque", "hausse"]
         self.positive_keywords = ["assouplissement", "baisse", "croissance", "stabilité", "favorable"]
+        self.df_macro = df_macro
+        self.SEED = 42
 
     def _analyze_sentiment(self, text):
         """Simple keyword-based sentiment analysis for macro text."""
@@ -39,21 +42,18 @@ class MacroPredictor:
             courbe_effet = 0.0005
             
         # Base modifier from BAM Rate (assuming normal is ~2.5 to 3.0)
-        bam_effet = (3.0 - float(taux_bam)) * 0.0001
+        # BUG 2 FIX: Increased sensitivity
+        bam_effet = (3.0 - float(taux_bam)) * 0.001
         
         # Apply logic by classification
         class_lower = str(classification).lower()
         if "oblig" in class_lower:
-            # Bonds are highly sensitive to yield curve and rate hikes (inversely)
             modifier = (courbe_effet * 2) + bam_effet + (sentiment_score * 0.0002)
         elif "action" in class_lower:
-            # Equities are sensitive to sentiment and rates
             modifier = courbe_effet + (bam_effet * 1.5) + (sentiment_score * 0.0005)
         elif "monet" in class_lower:
-            # Money market is stable, benefits slightly from higher rates
-            modifier = max(0, -bam_effet) * 0.1 # Very small positive impact
+            modifier = max(0, -bam_effet) * 0.1
         else:
-            # Diversified
             modifier = courbe_effet + bam_effet + (sentiment_score * 0.0003)
             
         return modifier
@@ -61,19 +61,12 @@ class MacroPredictor:
     def predict(self, df_history, taux_bam, courbe_taux, anticipations_text, days_ahead=30):
         """
         Generates predictions for the next `days_ahead`.
-        
-        Args:
-            df_history (pd.DataFrame): Must contain 'date', 'nom_fonds', 'classification', 'vl_jour'
-            taux_bam (float): Taux directeur (e.g., 2.75)
-            courbe_taux (str): Evolution description (e.g., "Hausse", "Stable")
-            anticipations_text (str): Partners macro predictions
-            days_ahead (int): Number of days to predict
-            
-        Returns:
-            pd.DataFrame: Contains original data + predictions flagged as 'Prédite'
         """
         if df_history.empty:
             return pd.DataFrame()
+
+        # BUG 1 FIX: Stable predictions with fixed seed
+        np.random.seed(self.SEED)
             
         # Ensure dates are datetime
         if not pd.api.types.is_datetime64_any_dtype(df_history['date']):
@@ -95,30 +88,38 @@ class MacroPredictor:
             last_date = df_fonds['date'].max()
             last_vl = df_fonds['vl_jour'].iloc[-1]
             
-            # Calculate baseline momentum over last 30 days
-            recent_data = df_fonds.tail(30)
-            if len(recent_data) > 1:
-                first_vl_recent = recent_data['vl_jour'].iloc[0]
-                days_diff = (last_date - recent_data['date'].iloc[0]).days
-                daily_momentum = (last_vl - first_vl_recent) / first_vl_recent / max(days_diff, 1)
+            # BUG 3 FIX: Theil-Sen regression for long-term trend
+            if len(df_fonds) > 3:
+                x = np.arange(len(df_fonds))
+                y = df_fonds['vl_jour'].values
+                # Robust linear regression
+                res = stats.theilslopes(y, x, 0.90)
+                slope = res[0]
+                daily_momentum = slope / last_vl if last_vl > 0 else 0.0
+            elif len(df_fonds) > 1:
+                first_vl = df_fonds['vl_jour'].iloc[0]
+                days_diff = (last_date - df_fonds['date'].iloc[0]).days
+                daily_momentum = (last_vl - first_vl) / first_vl / max(days_diff, 1)
             else:
                 daily_momentum = 0.0
                 
             # Get macro modifier
             macro_modifier = self._get_macro_modifier(classification, taux_bam, courbe_taux, sentiment)
             
-            # Total daily drift
-            daily_drift = daily_momentum + macro_modifier
+            # Capping macro modifier to 0.05% as per request
+            macro_modifier = max(-0.0005, min(0.0005, macro_modifier))
+            
+            # Weighting: 80% trend, 20% macro modifier
+            daily_drift = (daily_momentum * 0.8) + (macro_modifier * 0.2)
             
             # Generate future data
             current_vl = last_vl
             for i in range(1, days_ahead + 1):
                 next_date = last_date + timedelta(days=i)
-                # Skip weekends
-                if next_date.weekday() >= 5:
+                if next_date.weekday() >= 5: # Skip weekends
                     continue
                     
-                # Add some random noise based on class
+                # Noise based on class
                 volatility = 0.001
                 if "action" in str(classification).lower():
                     volatility = 0.005
@@ -126,8 +127,6 @@ class MacroPredictor:
                     volatility = 0.0001
                     
                 noise = np.random.normal(0, volatility)
-                
-                # Calculate next VL
                 current_vl = current_vl * (1 + daily_drift + noise)
                 
                 predictions.append({
@@ -148,3 +147,26 @@ class MacroPredictor:
             
         result_df = pd.DataFrame(predictions)
         return result_df.sort_values(['nom_fonds', 'date']).reset_index(drop=True)
+
+    def get_prediction_summary(self, df_result):
+        """Generates a text summary of the prediction logic for the user."""
+        if df_result.empty or 'type' not in df_result.columns:
+            return "Pas assez de données pour générer un résumé."
+            
+        preds = df_result[df_result['type'] == 'Prédiction']
+        if preds.empty:
+            return "Aucune prédiction générée."
+            
+        fonds = preds['nom_fonds'].iloc[0]
+        momentum = preds['momentum_base'].iloc[0]
+        macro = preds['macro_modifier'].iloc[0]
+        
+        trend_str = "haussière" if momentum > 0 else "baissière"
+        macro_str = "favorable" if macro > 0 else "défavorable"
+        
+        summary = f"**Analyse pour {fonds} :**\n\n"
+        summary += f"- **Tendance de fond (Theil-Sen) :** {trend_str} ({momentum*100:.4f}% / jour)\n"
+        summary += f"- **Impact Macro :** {macro_str} (ajustement de {macro*100:.4f}% / jour)\n"
+        summary += f"- **Synthèse :** La prédiction combine 80% de la tendance historique robuste et 20% des facteurs macro (BAM, Courbe, Sentiment)."
+        
+        return summary

@@ -337,6 +337,8 @@ def _normalize_asfim_columns(df: pd.DataFrame) -> pd.DataFrame:
             col_map[col] = "rachats"
 
     df = df.rename(columns=col_map)
+    # Fix duplicate columns (e.g. if 'Nature juridique' and 'Classification' both map to 'classe')
+    df = df.loc[:, ~df.columns.duplicated(keep='last')]
 
     # Colonnes obligatoires manquantes
     if "fonds" not in df.columns:

@@ -459,7 +459,7 @@ def main():
                 
             if predict_btn:
                 with st.spinner("Analyse macro-économique et prédiction en cours..."):
-                    predictor = MacroPredictor()
+                    predictor = MacroPredictor(df_macro=st.session_state.get("macro_dataset"))
                     df_pred = predictor.predict(df_to_predict, taux_bam, courbe_taux, anticipations_text, days_ahead=30)
                     
                     if not df_pred.empty and selected_fund_macro:
@@ -470,6 +470,9 @@ def main():
                         if df_plot.empty:
                             st.warning(f"Aucune donnée pour le fonds {selected_fund_macro}.")
                         else:
+                            # Afficher l'explication de la courbe
+                            st.info(predictor.get_prediction_summary(df_plot))
+                            
                             fig = px.line(df_plot, x='date', y='vl_jour', color='type',
                                           title=f"Impact Macro sur la VL (30 jours) - {selected_fund_macro}",
                                           color_discrete_map={"Historique": "blue", "Prédiction": "red"},
