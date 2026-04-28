@@ -570,6 +570,25 @@ def main():
             s3.metric("Articles Haussiers", f"{pos_news}")
             s4.metric("Articles Baissiers", f"{neg_news}")
 
+            # Réaction par thématique (Couche 5)
+            st.markdown("### Réaction de l'IA par Thématique")
+            t1, t2, t3 = st.columns(3)
+            
+            # BAM
+            bam_news = df_news[df_news['title'].str.contains('BAM|Bank Al-Maghrib|taux|monétaire', case=False)]
+            bam_s = bam_news['score_sentiment'].mean() if not bam_news.empty else 0
+            t1.metric("Politique Monétaire (BAM)", f"{bam_s:+.2f}", delta=None)
+            
+            # Obligations
+            bond_news = df_news[df_news['title'].str.contains('oblig|Bons du Trésor|dette', case=False)]
+            bond_s = bond_news['score_sentiment'].mean() if not bond_news.empty else 0
+            t2.metric("Marché Obligataire", f"{bond_s:+.2f}", delta=None)
+            
+            # Économie
+            eco_news = df_news[df_news['title'].str.contains('économie|pib|croissance|invest', case=False)]
+            eco_s = eco_news['score_sentiment'].mean() if not eco_news.empty else 0
+            t3.metric("Économie Générale", f"{eco_s:+.2f}", delta=None)
+
             # IA Synthesis Report
             st.markdown("### Rapport de Synthèse IA Complet")
             outlook = "FAVORABLE" if avg_s > 0.1 else "PRUDENT" if avg_s < -0.1 else "NEUTRE"
