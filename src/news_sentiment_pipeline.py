@@ -267,6 +267,15 @@ class NewsSentimentPipeline:
         
         data = []
         for i in range(n_articles):
+            source_key = np.random.choice(list(RSS_FEEDS.keys()))
+            # Realistic source mapping
+            source_urls = {
+                'medias24': 'https://medias24.com',
+                'leconomiste': 'https://www.leconomiste.com',
+                'map': 'https://www.mapexpress.ma'
+            }
+            source_url = source_urls.get(source_key, 'https://medias24.com')
+
             if i < 3:
                 # Articles arabes
                 title = np.random.choice(titles_ar)
@@ -279,11 +288,11 @@ class NewsSentimentPipeline:
                 lang = 'fr'
             
             data.append({
-                'source': np.random.choice(list(RSS_FEEDS.keys())),
+                'source': source_key,
                 'title': title,
                 'summary': summary,
                 'published': (datetime.now() - timedelta(hours=np.random.randint(1, 24))).isoformat(),
-                'link': f"https://example.com/article_{i}",
+                'link': source_url, # Lien vers le site source au lieu de example.com
                 'lang': lang,
                 'score_sentiment': round(np.random.uniform(-0.8, 0.9), 4)
             })
