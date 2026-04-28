@@ -74,8 +74,11 @@ class MacroPredictor:
             
         df_history = df_history.dropna(subset=['date', 'vl_jour']).sort_values('date')
         
-        # Analyze sentiment
-        sentiment = self._analyze_sentiment(anticipations_text)
+        # Analyze sentiment (Couche 5: Prioritize BERT scores from enriched data)
+        if 'score_sentiment_moyen_jour' in df_history.columns:
+            sentiment = df_history['score_sentiment_moyen_jour'].iloc[-1]
+        else:
+            sentiment = self._analyze_sentiment(anticipations_text)
         
         predictions = []
         

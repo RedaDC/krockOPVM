@@ -22,6 +22,8 @@ except ImportError as e:
     st.error(f"Impossible de charger la page macro : {e}")
     render_macro_data_tab = None
 
+from src.news_sentiment_pipeline import NewsSentimentPipeline
+
 # Page configuration
 st.set_page_config(
     page_title="OPCVM Analytics Maroc",
@@ -188,9 +190,16 @@ def main():
     # Load data
     @st.cache_data
     def get_data():
-        return load_mock_data()
+        df = load_mock_data()
+        # Initialiser le pipeline de sentiment (CamemBERT / BERT)
+        sentiment_pipeline = NewsSentimentPipeline()
+        # Pour la démo, on utilise des news générées réalistes si pas de flux RSS
+        df_news = sentiment_pipeline.generate_mock_news(n_articles=15)
+        df_agg = sentiment_pipeline.aggregate_by_classification(df_news, df)
+        df = sentiment_pipeline.merge_with_opcvm(df, df_agg)
+        return df, df_news
     
-    df = get_data()
+    df, df_news = get_data()
     
     # Sidebar
     st.sidebar.header("Filtres")
@@ -251,17 +260,18 @@ def main():
     total_aum = df_filtered['aum'].sum()
     avg_variation = df_filtered['variation_pct'].mean()
     total_funds = df_filtered['nom_fonds'].nunique()
-    avg_sentiment = df_filtered['score_sentiment'].mean()
+    # Utiliser le score de sentiment enrichi (Couche 5)
+    avg_sentiment = df_filtered['score_sentiment_moyen_jour'].mean()
     
     col1.metric("AUM Total (Md MAD)", f"{total_aum/1000:.2f}")
     col2.metric("Nombre de Fonds", total_funds)
     col3.metric("Variation Moyenne (%)", f"{avg_variation:.2f}%")
-    col4.metric("Sentiment Moyen", f"{avg_sentiment:.2f}")
+    col4.metric("Sentiment IA (CamemBERT)", f"{avg_sentiment:.2f}")
     
     st.markdown("---")
     
     # Tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Signaux de Trading", "Analyse Technique", "Prévisions IA", "Données Brutes", "Analyse Macro"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Signaux de Trading", "Analyse Technique", "Prévisions IA", "Actualités & Sentiment", "Données Brutes", "Analyse Macro"])
     
     with tab1:
         st.subheader("Signaux de Trading du Jour")
@@ -520,19 +530,43 @@ def main():
                         st.warning("Veuillez sélectionner un fonds existant pour voir sa prédiction.")
 
     with tab4:
-        st.subheader("Donnees Brutes")
-        st.dataframe(df_filtered, use_container_width=True)
+        st.subheader("Analyse de Sentiment IA (Couche 5)")
+        st.info("Cette section utilise des modèles Transformer (CamemBERT/BERT) pour analyser l'actualité financière marocaine et son impact potentiel sur les OPCVM.")
         
+        if not df_news.empty:
+            # Stats de sentiment
+            s1, s2, s3 = st.columns(3)
+            pos_news = len(df_news[df_news['score_sentiment'] > 0])
+            neg_news = len(df_news[df_news['score_sentiment'] < 0])
+            s1.metric("Articles Analysés", len(df_news))
+            s2.metric("Tendance Positive", f"{pos_news}")
+            s3.metric("Tendance Négative", f"{neg_news}")
+            
+            # Liste des articles
+            st.markdown("### Dernières Actualités Financières")
+            for _, article in df_news.iterrows():
+                with st.expander(f"{article['title']} (Source: {article['source']})"):
+                    st.write(article['summary'])
+                    sentiment_val = article['score_sentiment']
+                    color = "green" if sentiment_val > 0 else "red" if sentiment_val < 0 else "gray"
+                    st.markdown(f"**Score de Sentiment (CamemBERT) :** <span style='color:{color}'>{sentiment_val:.4f}</span>", unsafe_allow_html=True)
+                    st.caption(f"Publié le : {article['published']} | Langue : {article['lang']}")
+        else:
+            st.warning("Aucune actualité collectée pour le moment.")
+
+    with tab5:
+        st.subheader("Données Brutes")
+        st.dataframe(df_filtered, use_container_width=True)
         # Download button
         csv = df_filtered.to_csv(index=False)
         st.download_button(
-            label="Telecharger en CSV",
+            label="Télécharger en CSV",
             data=csv,
             file_name=f"opcvm_data_{datetime.now().strftime('%Y%m%d')}.csv",
             mime="text/csv"
         )
         
-    with tab5:
+    with tab6:
         if render_macro_data_tab is not None:
             render_macro_data_tab()
         else:
