@@ -189,7 +189,7 @@ def main():
     
     # Load data
     @st.cache_data
-    def get_data(v="1.2"):
+    def get_data(v="1.3"):
         df = load_mock_data()
         # Initialiser le pipeline de sentiment (CamemBERT / BERT)
         sentiment_pipeline = NewsSentimentPipeline()
@@ -199,7 +199,7 @@ def main():
         df = sentiment_pipeline.merge_with_opcvm(df, df_agg)
         return df, df_news
     
-    df, df_news = get_data(v="1.2")
+    df, df_news = get_data(v="1.3")
     
     # Sidebar
     st.sidebar.header("Filtres")

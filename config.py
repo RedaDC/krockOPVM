@@ -8,8 +8,8 @@ MASI_URL = "https://www.casablanca-bourse.com"
 
 # Mots-clés pour collecte actualités
 SENTIMENT_KEYWORDS = [
-    "OPCVM", "bourse Casablanca", "Bank Al-Maghrib",
-    "taux directeur", "obligataire", "actions Maroc"
+    "OPCVM", "bourse", "BAM", "Bank Al-Maghrib", "investis",
+    "taux", "obligataire", "actions", "Maroc", "économie", "croissance"
 ]
 
 # Seuil pour signaux de trading (0.5%) - SERA REMPLACÉ PAR DYNAMIC_THRESHOLDS
@@ -34,7 +34,7 @@ TELEGRAM = {
 # Flux RSS actualités marocaines
 RSS_FEEDS = {
     'medias24': 'https://medias24.com/feed',
-    'leconomiste': 'https://www.leconomiste.com/rss',
+    'leconomiste': 'https://www.leconomiste.com/rss.xml',
     'map': 'https://www.mapexpress.ma/feed'
 }
 
