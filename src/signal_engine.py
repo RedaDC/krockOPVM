@@ -217,7 +217,7 @@ class SignalEngine:
 
         Retourne : (rf_score_0_100, mae, directional_accuracy, top_features)
         """
-        feature_cols = [c for c in df.columns if c != target_col]
+        feature_cols = [c for c in df.select_dtypes(include=[np.number]).columns if c != target_col]
         X = df[feature_cols].dropna()
         y = df[target_col].loc[X.index]
 
