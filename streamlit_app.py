@@ -6,9 +6,7 @@ Interactive dashboard for Moroccan investment fund analysis
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
-import os
 
 # Page configuration
 st.set_page_config(
@@ -32,18 +30,6 @@ st.markdown("""
         padding: 1rem;
         border-radius: 0.5rem;
         border-left: 4px solid #1f77b4;
-    }
-    .signal-buy {
-        color: #2ecc71;
-        font-weight: bold;
-    }
-    .signal-sell {
-        color: #e74c3c;
-        font-weight: bold;
-    }
-    .signal-wait {
-        color: #95a5a6;
-        font-weight: bold;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -166,34 +152,6 @@ def generate_signals(df):
         })
     
     return pd.DataFrame(signals)
-
-
-def plot_vl_trend(df, selected_fund):
-    """Plot VL trend for selected fund"""
-    df_fund = df[df['nom_fonds'] == selected_fund].sort_values('date')
-    
-    fig, ax = plt.subplots(figsize=(12, 6))
-    
-    # Plot VL
-    ax.plot(df_fund['date'], df_fund['vl_jour'], label='VL Journaliere', linewidth=2, color='#1f77b4')
-    
-    # Add moving averages
-    df_fund['SMA_10'] = df_fund['vl_jour'].rolling(window=10).mean()
-    df_fund['SMA_30'] = df_fund['vl_jour'].rolling(window=30).mean()
-    
-    ax.plot(df_fund['date'], df_fund['SMA_10'], label='Moyenne Mobile 10j', linewidth=1.5, color='#ff7f0e', alpha=0.7)
-    ax.plot(df_fund['date'], df_fund['SMA_30'], label='Moyenne Mobile 30j', linewidth=1.5, color='#2ca02c', alpha=0.7)
-    
-    ax.set_xlabel('Date', fontsize=12)
-    ax.set_ylabel('VL (MAD)', fontsize=12)
-    ax.set_title(f'Evolution VL - {selected_fund}', fontsize=14, fontweight='bold')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    
-    # Rotate x-axis labels
-    plt.xticks(rotation=45, ha='right')
-    
-    st.pyplot(fig)
 
 
 def main():
@@ -321,35 +279,72 @@ def main():
         st.subheader("Analyse Technique")
         
         if selected_fund:
-            plot_vl_trend(df_filtered, selected_fund)
-            
-            # Fund stats
+            # Get fund data
             df_fund = df_filtered[df_filtered['nom_fonds'] == selected_fund].sort_values('date')
             
-            col1, col2, col3 = st.columns(3)
-            
-            current_vl = df_fund['vl_jour'].iloc[-1]
-            min_vl = df_fund['vl_jour'].min()
-            max_vl = df_fund['vl_jour'].max()
-            avg_vl = df_fund['vl_jour'].mean()
-            volatility = df_fund['variation_pct'].std()
-            
-            col1.metric("VL Actuelle", f"{current_vl:.2f} MAD")
-            col2.metric("VL Min/Max", f"{min_vl:.2f} / {max_vl:.2f}")
-            col3.metric("Volatilite (%)", f"{volatility:.2f}%")
-            
-            # Distribution
-            st.markdown("### Distribution des Variations")
-            
-            fig, ax = plt.subplots(figsize=(10, 5))
-            ax.hist(df_fund['variation_pct'], bins=30, edgecolor='black', alpha=0.7, color='#1f77b4')
-            ax.set_xlabel('Variation (%)', fontsize=12)
-            ax.set_ylabel('Frequence', fontsize=12)
-            ax.set_title(f'Distribution des Variations - {selected_fund}', fontsize=14)
-            ax.axvline(x=0, color='red', linestyle='--', linewidth=2)
-            ax.grid(True, alpha=0.3)
-            
-            st.pyplot(fig)
+            if len(df_fund) > 0:
+                # Use Plotly for interactive charts
+                import plotly.graph_objects as go
+                from plotly.subplots import make_subplots
+                
+                # Create figure
+                fig = make_subplots(
+                    rows=2, cols=1,
+                    shared_xaxes=True,
+                    vertical_spacing=0.05,
+                    row_heights=[0.7, 0.3],
+                    subplot_titles=(f'Evolution VL - {selected_fund}', 'Variation Journaliere (%)')
+                )
+                
+                # Add VL trace
+                fig.add_trace(
+                    go.Scatter(x=df_fund['date'], y=df_fund['vl_jour'], 
+                              name='VL', line=dict(color='#1f77b4', width=2)),
+                    row=1, col=1
+                )
+                
+                # Add moving averages
+                df_fund['SMA_10'] = df_fund['vl_jour'].rolling(window=10).mean()
+                df_fund['SMA_30'] = df_fund['vl_jour'].rolling(window=30).mean()
+                
+                fig.add_trace(
+                    go.Scatter(x=df_fund['date'], y=df_fund['SMA_10'], 
+                              name='SMA 10j', line=dict(color='#ff7f0e', width=1.5)),
+                    row=1, col=1
+                )
+                
+                fig.add_trace(
+                    go.Scatter(x=df_fund['date'], y=df_fund['SMA_30'], 
+                              name='SMA 30j', line=dict(color='#2ca02c', width=1.5)),
+                    row=1, col=1
+                )
+                
+                # Add variation trace
+                fig.add_trace(
+                    go.Bar(x=df_fund['date'], y=df_fund['variation_pct'],
+                          name='Variation',
+                          marker_color=df_fund['variation_pct'].apply(
+                              lambda x: '#2ecc71' if x > 0 else '#e74c3c')),
+                    row=2, col=1
+                )
+                
+                fig.update_layout(height=700, showlegend=True, hovermode='x unified')
+                fig.update_xaxes(rangeslider_visible=False)
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Fund stats
+                col1, col2, col3 = st.columns(3)
+                
+                current_vl = df_fund['vl_jour'].iloc[-1]
+                min_vl = df_fund['vl_jour'].min()
+                max_vl = df_fund['vl_jour'].max()
+                avg_vl = df_fund['vl_jour'].mean()
+                volatility = df_fund['variation_pct'].std()
+                
+                col1.metric("VL Actuelle", f"{current_vl:.2f} MAD")
+                col2.metric("VL Min/Max", f"{min_vl:.2f} / {max_vl:.2f}")
+                col3.metric("Volatilite (%)", f"{volatility:.2f}%")
     
     with tab3:
         st.subheader("Donnees Brutes")
