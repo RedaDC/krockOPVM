@@ -90,8 +90,9 @@ def build_vl_features(df_vl: pd.DataFrame, df_macro: pd.DataFrame) -> pd.DataFra
     df["is_quarter_end"] = df.index.is_quarter_end.astype(int)
 
     # ── Merge avec données macro ──────────────────────────────────────
-    df = df.join(df_macro, how="left", rsuffix="_macro")
-    df = _remove_dup_columns(df)
+    if df_macro is not None and not df_macro.empty:
+        df = df.join(df_macro, how="left", rsuffix="_macro")
+        df = _remove_dup_columns(df)
 
     # ── Features dérivées cross-sources ──────────────────────────────
     if "taux_directeur_bam" in df.columns and "bdt_10y" in df.columns:
