@@ -459,10 +459,19 @@ def main():
         col_m1, col_m2 = st.columns([1, 2])
         
         with col_m1:
-            st.markdown("### 1. Sélection du Fonds")
-            macro_funds = sorted(df_to_predict['nom_fonds'].dropna().unique())
+            st.markdown("### 1. Sélection des Produits")
+            macro_categories = ["Tous"] + list(df_to_predict['classification'].dropna().unique())
+            selected_cat = st.selectbox("Catégorie de produits", options=macro_categories)
+            
+            if selected_cat == "Tous":
+                macro_funds = sorted(df_to_predict['nom_fonds'].dropna().unique())
+            else:
+                macro_funds = sorted(df_to_predict[df_to_predict['classification'] == selected_cat]['nom_fonds'].dropna().unique())
+                
             default_idx = macro_funds.index(selected_fund) if selected_fund in macro_funds else 0
-            selected_fund_macro = st.selectbox("Fonds à analyser", options=macro_funds, index=default_idx if macro_funds else 0)
+            selected_fund_macro = st.selectbox("Fonds focus (pour graphique)", options=macro_funds, index=default_idx if macro_funds else 0)
+            
+            predict_all = st.checkbox("Prédire pour toute la catégorie", value=False)
             
             st.markdown("### 2. Paramètres Macro")
             taux_bam = st.number_input("Taux Directeur BAM (%)", value=2.75, step=0.25)
@@ -480,54 +489,59 @@ def main():
                 st.info("Aucun fichier uploadé. Utilisation des données du tableau de bord par défaut.")
                 
             if predict_btn:
-                with st.spinner("Entraînement de l'IA (V2) et prédiction..."):
-                    # Layer 2 & 4: Advanced ML Predictor
+                funds_to_process = macro_funds if predict_all else [selected_fund_macro]
+                all_results = []
+                
+                with st.spinner(f"Analyse IA de {len(funds_to_process)} produit(s)..."):
                     adv_predictor = AdvancedPredictor(df_macro=st.session_state.get("macro_dataset"))
-                    df_fund_hist = df_to_predict[df_to_predict['nom_fonds'] == selected_fund_macro].copy()
+                    progress_bar = st.progress(0)
                     
-                    metrics, error = adv_predictor.train_and_evaluate(df_fund_hist)
-                    
-                    if error:
-                        st.warning(f"Modèle ML indisponible : {error}. Repli sur le modèle Macro Linéaire.")
-                        predictor = MacroPredictor(df_macro=st.session_state.get("macro_dataset"))
-                        df_pred = predictor.predict(df_to_predict, taux_bam, courbe_taux, anticipations_text, days_ahead=30)
-                    else:
-                        st.info("Modèle Machine Learning (Couche 2/4) entraîné avec succès.")
-                        m1, m2, m3 = st.columns(3)
-                        m1.metric("MAE (Rendement)", metrics["mae"])
-                        m2.metric("RMSE", metrics["rmse"])
-                        m3.metric("Directional Accuracy", f"{metrics['dir_accuracy']*100:.1f}%")
+                    for i, fund_name in enumerate(funds_to_process):
+                        df_fund_hist = df_to_predict[df_to_predict['nom_fonds'] == fund_name].copy()
+                        metrics, error = adv_predictor.train_and_evaluate(df_fund_hist)
                         
+                        if not error:
+                            df_pred_v2 = adv_predictor.predict_future(df_fund_hist)
+                            last_vl = df_fund_hist['vl_jour'].iloc[-1]
+                            pred_vl = df_pred_v2['vl_jour'].iloc[-1]
+                            perf_30j = (pred_vl / last_vl - 1) * 100
+                            
+                            all_results.append({
+                                "Produit": fund_name,
+                                "VL Actuelle": last_vl,
+                                "VL Cible (30j)": pred_vl,
+                                "Performance Attendue (%)": round(perf_30j, 2),
+                                "Fiabilité (Accuracy)": f"{metrics['dir_accuracy']*100:.1f}%",
+                                "Score Sentiment": df_fund_hist['score_sentiment_moyen_jour'].iloc[-1] if 'score_sentiment_moyen_jour' in df_fund_hist.columns else 0
+                            })
+                        
+                        progress_bar.progress((i + 1) / len(funds_to_process))
+                
+                if all_results:
+                    st.markdown("### Tableau de Performance Prévisionnelle (IA)")
+                    df_res = pd.DataFrame(all_results).sort_values("Performance Attendue (%)", ascending=False)
+                    
+                    # Highlight top performance
+                    st.dataframe(df_res.style.background_gradient(subset=["Performance Attendue (%)"], cmap="RdYlGn"), use_container_width=True)
+                    
+                    # Focus on specific fund chart
+                    if selected_fund_macro:
+                        st.markdown(f"---")
+                        st.markdown(f"### Focus Détail : {selected_fund_macro}")
+                        df_fund_hist = df_to_predict[df_to_predict['nom_fonds'] == selected_fund_macro].copy()
+                        adv_predictor.train_and_evaluate(df_fund_hist) # Re-train for chart if needed or cache
                         df_pred_v2 = adv_predictor.predict_future(df_fund_hist)
                         df_fund_hist['type'] = 'Historique'
-                        df_pred = pd.concat([df_fund_hist, df_pred_v2]).sort_values('date')
-                    
-                    if not df_pred.empty and selected_fund_macro:
-                        st.markdown(f"### Trajectoire Prédite : {selected_fund_macro}")
-                        df_plot = df_pred[df_pred['nom_fonds'] == selected_fund_macro].copy()
+                        df_plot = pd.concat([df_fund_hist, df_pred_v2]).sort_values('date')
                         
-                        if df_plot.empty:
-                            st.warning(f"Aucune donnée pour le fonds {selected_fund_macro}.")
-                        else:
-                            # Afficher l'explication (si modèle linéaire utilisé, sinon résumé ML)
-                            if 'error' not in locals() or error:
-                                predictor = MacroPredictor(df_macro=st.session_state.get("macro_dataset"))
-                                st.info(predictor.get_prediction_summary(df_plot))
-                            
-                            fig = px.line(df_plot, x='date', y='vl_jour', color='type',
-                                          title=f"Impact IA sur la VL (30 jours) - {selected_fund_macro}",
-                                          color_discrete_map={"Historique": "blue", "Prédiction": "red", "Prediction V2": "green"},
-                                          line_dash='type')
-                                          
-                            fig.update_layout(height=500, hovermode='x unified')
-                            st.plotly_chart(fig, use_container_width=True)
-                            
-                            st.markdown("### Détail des Données Prédites")
-                            df_pred_view = df_plot[df_plot['type'].isin(['Prédiction', 'Prediction V2'])][['date', 'vl_jour']]
-                            if not df_pred_view.empty:
-                                st.dataframe(df_pred_view, use_container_width=True)
-                    else:
-                        st.warning("Veuillez sélectionner un fonds existant pour voir sa prédiction.")
+                        fig = px.line(df_plot, x='date', y='vl_jour', color='type',
+                                      title=f"Trajectoire IA détaillée - {selected_fund_macro}",
+                                      color_discrete_map={"Historique": "blue", "Prediction V2": "green"},
+                                      line_dash='type')
+                        fig.update_layout(height=450, hovermode='x unified')
+                        st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.error("Aucune prédiction n'a pu être générée. Vérifiez l'historique des données.")
 
     with tab4:
         st.subheader("Analyse de Sentiment IA (Couche 5)")
