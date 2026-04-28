@@ -121,7 +121,7 @@ def load_mock_data():
 
 
 def generate_signals(df):
-    """Generate trading signals based on simple moving average crossover"""
+    """Generate trading signals calibrated by fund category to avoid false signals."""
     signals = []
     
     for fund in df['nom_fonds'].unique():
@@ -133,18 +133,29 @@ def generate_signals(df):
         # Latest data
         latest = df_fund.iloc[-1]
         prev = df_fund.iloc[-2]
+        classification = str(latest['classification']).lower()
         
-        # Calculate simple moving averages
-        sma_10 = df_fund['vl_jour'].tail(10).mean()
-        sma_30 = df_fund['vl_jour'].tail(30).mean()
+        # Calibration par catégorie (Couche 3)
+        if "monet" in classification or "oblig" in classification:
+            # Moins liquide : fenêtres plus longues et seuils plus stricts
+            w_short, w_long = 15, 60
+            threshold = 1.002  # 0.2% d'écart minimum pour l'obligataire (sensibilité plus fine)
+        else:
+            # Actions : fenêtres standard
+            w_short, w_long = 10, 30
+            threshold = 1.01   # 1% d'écart minimum pour les actions
+        
+        # Calculate moving averages
+        sma_s = df_fund['vl_jour'].tail(w_short).mean()
+        sma_l = df_fund['vl_jour'].tail(w_long).mean()
         
         # Signal logic
-        if sma_10 > sma_30 * 1.01:
+        if sma_s > sma_l * threshold:
             signal = "ACHETER"
-            confidence = "FORTE" if sma_10 > sma_30 * 1.02 else "MODEREE"
-        elif sma_10 < sma_30 * 0.99:
+            confidence = "FORTE" if sma_s > sma_l * (threshold + 0.005) else "MODEREE"
+        elif sma_s < sma_l * (2 - threshold):
             signal = "VENDRE"
-            confidence = "FORTE" if sma_10 < sma_30 * 0.98 else "MODEREE"
+            confidence = "FORTE" if sma_s < sma_l * (2 - threshold - 0.005) else "MODEREE"
         else:
             signal = "ATTENDRE"
             confidence = "FAIBLE"

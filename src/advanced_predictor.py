@@ -15,13 +15,20 @@ class AdvancedPredictor:
     """
     def __init__(self, df_macro=None):
         self.df_macro = df_macro
-        self.model = RandomForestRegressor(n_estimators=100, random_state=42)
+        # Regularization: Limit depth and leaf size for short series
+        self.model = RandomForestRegressor(
+            n_estimators=100, 
+            max_depth=5, 
+            min_samples_leaf=10, 
+            random_state=42
+        )
         self.is_trained = False
         self.features = []
 
     def train_and_evaluate(self, df_vl, test_days=30):
         """
         Trains the model using walk-forward validation and returns metrics.
+        Includes Feature Selection (Importance) to avoid overfitting.
         """
         if df_vl.empty or self.df_macro is None:
             return None, "Données insuffisantes"
@@ -37,17 +44,28 @@ class AdvancedPredictor:
         df_feat["target"] = df_feat["vl_ret_log"].shift(-1)
         df_feat = df_feat.dropna()
 
-        # Features selection (exclude target and non-numeric)
-        self.features = [c for c in df_feat.columns if c not in ["target", "vl", "vl_ret", "vl_ret_log"]]
-        X = df_feat[self.features]
-        y = df_feat["target"]
+        # Initial features selection (exclude target and non-numeric)
+        all_numeric_features = [c for c in df_feat.columns if c not in ["target", "vl", "vl_ret", "vl_ret_log"]]
+        X_all = df_feat[all_numeric_features]
+        y_all = df_feat["target"]
 
-        # 2. Walk-forward Split
+        # 2. Feature Selection via Importance (Preliminary fit)
+        selector_model = RandomForestRegressor(n_estimators=50, max_depth=5, random_state=42)
+        selector_model.fit(X_all, y_all)
+        
+        # Select top 15 features
+        importances = pd.Series(selector_model.feature_importances_, index=all_numeric_features)
+        self.features = importances.sort_values(ascending=False).head(15).index.tolist()
+        
+        X = df_feat[self.features]
+        y = y_all
+
+        # 3. Walk-forward Split
         train_size = len(df_feat) - test_days
         X_train, X_test = X.iloc[:train_size], X.iloc[train_size:]
         y_train, y_test = y.iloc[:train_size], y.iloc[train_size:]
 
-        # 3. Train
+        # 4. Train final regularized model
         self.model.fit(X_train, y_train)
         self.is_trained = True
 
