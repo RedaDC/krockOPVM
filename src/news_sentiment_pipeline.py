@@ -93,14 +93,14 @@ class NewsSentimentPipeline:
                     summary = entry.get('summary', '')
                     text_to_check = (title + ' ' + summary).lower()
                     
-                        if any(kw.lower() in text_to_check for kw in self.keywords):
-                            articles.append({
-                                'source': source,
-                                'title': title,
-                                'summary': summary[:2000],  # Étendu à 2000 caractères
-                                'published': entry.get('published', datetime.now().isoformat()),
-                                'link': entry.get('link', '')
-                            })
+                    if any(kw.lower() in text_to_check for kw in self.keywords):
+                        articles.append({
+                            'source': source,
+                            'title': title,
+                            'summary': summary[:2000],  # Étendu à 2000 caractères
+                            'published': entry.get('published', datetime.now().isoformat()),
+                            'link': entry.get('link', '')
+                        })
                 
                 print(f"  {len([a for a in articles if a['source'] == source])} articles trouvés")
                 time.sleep(REQUEST_DELAY)  # Délai 2s entre requêtes
