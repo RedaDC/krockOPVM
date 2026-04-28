@@ -15,6 +15,7 @@ import os
 # Add src to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from src.macro_prediction import MacroPredictor
+from src.advanced_predictor import AdvancedPredictor
 try:
     from pages.macro_data_page import render_macro_data_tab
 except ImportError as e:
@@ -249,7 +250,7 @@ def main():
     st.markdown("---")
     
     # Tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Signaux de Trading", "Analyse Technique", "Prédictions Macro", "Donnees Brutes", "Données Macro (Avancé)"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Signaux de Trading", "Analyse Technique", "Prévisions IA", "Données Brutes", "Analyse Macro"])
     
     with tab1:
         st.subheader("Signaux de Trading du Jour")
@@ -458,31 +459,50 @@ def main():
                 st.info("Aucun fichier uploadé. Utilisation des données du tableau de bord par défaut.")
                 
             if predict_btn:
-                with st.spinner("Analyse macro-économique et prédiction en cours..."):
-                    predictor = MacroPredictor(df_macro=st.session_state.get("macro_dataset"))
-                    df_pred = predictor.predict(df_to_predict, taux_bam, courbe_taux, anticipations_text, days_ahead=30)
+                with st.spinner("Entraînement de l'IA (V2) et prédiction..."):
+                    # Layer 2 & 4: Advanced ML Predictor
+                    adv_predictor = AdvancedPredictor(df_macro=st.session_state.get("macro_dataset"))
+                    df_fund_hist = df_to_predict[df_to_predict['nom_fonds'] == selected_fund_macro].copy()
+                    
+                    metrics, error = adv_predictor.train_and_evaluate(df_fund_hist)
+                    
+                    if error:
+                        st.warning(f"Modèle ML indisponible : {error}. Repli sur le modèle Macro Linéaire.")
+                        predictor = MacroPredictor(df_macro=st.session_state.get("macro_dataset"))
+                        df_pred = predictor.predict(df_to_predict, taux_bam, courbe_taux, anticipations_text, days_ahead=30)
+                    else:
+                        st.info("Modèle Machine Learning (Couche 2/4) entraîné avec succès.")
+                        m1, m2, m3 = st.columns(3)
+                        m1.metric("MAE (Rendement)", metrics["mae"])
+                        m2.metric("RMSE", metrics["rmse"])
+                        m3.metric("Directional Accuracy", f"{metrics['dir_accuracy']*100:.1f}%")
+                        
+                        df_pred_v2 = adv_predictor.predict_future(df_fund_hist)
+                        df_fund_hist['type'] = 'Historique'
+                        df_pred = pd.concat([df_fund_hist, df_pred_v2]).sort_values('date')
                     
                     if not df_pred.empty and selected_fund_macro:
-                        st.markdown(f"### Trajectoire Prédite: {selected_fund_macro}")
-                        
+                        st.markdown(f"### Trajectoire Prédite : {selected_fund_macro}")
                         df_plot = df_pred[df_pred['nom_fonds'] == selected_fund_macro].copy()
                         
                         if df_plot.empty:
                             st.warning(f"Aucune donnée pour le fonds {selected_fund_macro}.")
                         else:
-                            # Afficher l'explication de la courbe
-                            st.info(predictor.get_prediction_summary(df_plot))
+                            # Afficher l'explication (si modèle linéaire utilisé, sinon résumé ML)
+                            if 'error' not in locals() or error:
+                                predictor = MacroPredictor(df_macro=st.session_state.get("macro_dataset"))
+                                st.info(predictor.get_prediction_summary(df_plot))
                             
                             fig = px.line(df_plot, x='date', y='vl_jour', color='type',
-                                          title=f"Impact Macro sur la VL (30 jours) - {selected_fund_macro}",
-                                          color_discrete_map={"Historique": "blue", "Prédiction": "red"},
+                                          title=f"Impact IA sur la VL (30 jours) - {selected_fund_macro}",
+                                          color_discrete_map={"Historique": "blue", "Prédiction": "red", "Prediction V2": "green"},
                                           line_dash='type')
                                           
                             fig.update_layout(height=500, hovermode='x unified')
                             st.plotly_chart(fig, use_container_width=True)
                             
                             st.markdown("### Détail des Données Prédites")
-                            df_pred_view = df_plot[df_plot['type'] == 'Prédiction'][['date', 'vl_jour', 'momentum_base', 'macro_modifier']]
+                            df_pred_view = df_plot[df_plot['type'].isin(['Prédiction', 'Prediction V2'])][['date', 'vl_jour']]
                             if not df_pred_view.empty:
                                 st.dataframe(df_pred_view, use_container_width=True)
                     else:

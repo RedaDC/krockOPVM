@@ -102,6 +102,12 @@ def build_vl_features(df_vl: pd.DataFrame, df_macro: pd.DataFrame) -> pd.DataFra
             df["masi_ret"].rolling(60).var()
         )
 
+    # ── Macro Spreads Laggés ──────────────────────────────────────────
+    if "spread_10y_3m" in df.columns:
+        df["lag_spread_10y_3m"] = df["spread_10y_3m"].shift(1)
+    if "reserves_change_mrd_mad" in df.columns:
+        df["reserves_change_mom"] = df["reserves_change_mrd_mad"].pct_change(20)
+
     log.info(f"Features construites : {len(df.columns)} colonnes, {len(df)} lignes")
     return df
 

@@ -25,7 +25,7 @@ from feature_builder import build_vl_features, get_feature_summary
 
 
 def render_macro_data_tab():
-    st.header("🌍 Données Macro-Économiques — Couche 1")
+    st.header("Données Macro-Économiques — Couche 1")
     st.caption("Agrégation des données BAM, BDT, Bourse de Casablanca, ASFIM et World Bank")
 
     # ── Contrôles ──────────────────────────────────────────────────────────────
@@ -33,7 +33,7 @@ def render_macro_data_tab():
     with col1:
         start_date = st.date_input("Date de début", value=pd.to_datetime("2021-01-01"))
     with col2:
-        refresh = st.button("🔄 Actualiser les données", use_container_width=True)
+        refresh = st.button("Actualiser les données", use_container_width=True)
     with col3:
         asfim_file = st.file_uploader("Importer ASFIM (Excel/CSV)", type=["xlsx", "xls", "csv"])
 
@@ -63,12 +63,12 @@ def render_macro_data_tab():
                 tmp_path = tmp.name
             df_asfim = load_asfim_vl(tmp_path, original_filename=asfim_file.name)
             os.unlink(tmp_path)
-            st.success(f"✅ ASFIM chargé : {len(df_asfim):,} lignes, {df_asfim['fonds'].nunique()} fonds")
+            st.success(f"ASFIM chargé : {len(df_asfim):,} lignes, {df_asfim['fonds'].nunique()} fonds")
         except Exception as e:
             st.error(f"Erreur ASFIM : {e}")
 
     # ── KPIs Macro ──────────────────────────────────────────────────────────────
-    st.subheader("📊 Indicateurs Clés")
+    st.subheader("Indicateurs Clés")
     kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
 
     last = df_macro.iloc[-1] if not df_macro.empty else {}
@@ -100,7 +100,7 @@ def render_macro_data_tab():
 
     # ── Onglets par source ──────────────────────────────────────────────────────
     tab_bam, tab_bdt, tab_bourse, tab_wb, tab_asfim, tab_features = st.tabs([
-        "🏦 BAM", "📉 Courbe BDT", "📈 Bourse", "🌐 World Bank", "📁 ASFIM", "⚙️ Features"
+        "BAM", "Courbe BDT", "Bourse", "World Bank", "ASFIM", "Features"
     ])
 
     # ── Tab BAM ────────────────────────────────────────────────────────────────
@@ -241,7 +241,7 @@ def render_macro_data_tab():
 
     # ── Tab Features ───────────────────────────────────────────────────────────
     with tab_features:
-        st.subheader("⚙️ Feature Engineering — Aperçu")
+        st.subheader("Feature Engineering — Aperçu")
         st.caption("Prévisualisation des features calculées sur un fonds exemple")
 
         if df_asfim is not None and not df_asfim.empty:
@@ -252,7 +252,7 @@ def render_macro_data_tab():
             with st.spinner("Calcul des features..."):
                 df_feat = build_vl_features(df_vl_sample, df_macro)
 
-            st.success(f"✅ {len(df_feat.columns)} features calculées sur {len(df_feat):,} observations")
+            st.success(f"{len(df_feat.columns)} features calculées sur {len(df_feat):,} observations")
 
             summary = get_feature_summary(df_feat)
             st.dataframe(summary, use_container_width=True, height=400)
