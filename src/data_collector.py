@@ -198,11 +198,15 @@ def get_masi_madex(start_date: str = "2020-01-01") -> pd.DataFrame:
             log.info(f"Tentative stooq pour {col.upper()}...")
             dfs.append(_get_stooq_index(col))
 
+    dfs = [d for d in dfs if not d.empty]
     if not dfs:
         log.error("Impossible de télécharger MASI/MADEX")
         return pd.DataFrame()
 
-    df = dfs[0].join(dfs[1], how="outer") if len(dfs) > 1 else dfs[0]
+    df = dfs[0]
+    for d in dfs[1:]:
+        df = df.join(d, how="outer")
+        
     df = df[df.index >= start_date].sort_index()
 
     # Calcul des rendements et volatilité
