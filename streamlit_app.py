@@ -204,6 +204,10 @@ def main():
     # Sidebar
     st.sidebar.header("Filtres")
     
+    if st.sidebar.button("Vider le cache & Actualiser"):
+        st.cache_data.clear()
+        st.rerun()
+    
     # Classification filter
     classifications = st.sidebar.multiselect(
         "Classification",
