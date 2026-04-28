@@ -87,28 +87,41 @@ class NewsSentimentPipeline:
                 print(f"  Collecte depuis {source}...")
                 feed = feedparser.parse(url)
                 
+                source_articles = []
                 for entry in feed.entries:
-                    # Filtrage par mots-clés
                     title = entry.get('title', '')
                     summary = entry.get('summary', '')
                     text_to_check = (title + ' ' + summary).lower()
                     
-                    if any(kw.lower() in text_to_check for kw in self.keywords):
-                        articles.append({
+                    # Score de pertinence
+                    match = any(kw.lower() in text_to_check for kw in self.keywords)
+                    
+                    if match or len(source_articles) < 5: # Garder au moins 5 articles même si pas de match
+                        source_articles.append({
                             'source': source,
                             'title': title,
-                            'summary': summary[:2000],  # Étendu à 2000 caractères
+                            'summary': summary[:2000],
                             'published': entry.get('published', datetime.now().isoformat()),
                             'link': entry.get('link', '')
                         })
+                        if match: # Marquer si c'est un match financier
+                            source_articles[-1]['pertinent'] = True
+                        else:
+                            source_articles[-1]['pertinent'] = False
                 
-                print(f"  {len([a for a in articles if a['source'] == source])} articles trouvés")
-                time.sleep(REQUEST_DELAY)  # Délai 2s entre requêtes
+                articles.extend(source_articles)
+                print(f"  {len(source_articles)} articles récupérés")
+                time.sleep(REQUEST_DELAY)
                 
             except Exception as e:
                 print(f"  Erreur {source}: {e}")
         
         df = pd.DataFrame(articles)
+        if not df.empty:
+            # Trier pour mettre les pertinents en haut
+            if 'pertinent' in df.columns:
+                df = df.sort_values(by='pertinent', ascending=False)
+        
         print(f"\nTotal articles collectés: {len(df)}")
         return df
     
