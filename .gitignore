@@ -24,14 +24,16 @@ wheels/
 *.egg
 
 # Data files (large)
-data/raw/historique/*.xlsx
-data/raw/historique/*.csv
-data/processed/*.csv
+data/**/*.xlsx
+data/**/*.csv
+data/*.xlsx
+data/*.csv
 outputs/*.csv
 outputs/*.h5
 outputs/*.png
 logs/*.log
 logs/*.csv
+*.log
 
 # Configuration with sensitive data
 config_local.py
