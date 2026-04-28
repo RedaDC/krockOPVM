@@ -191,7 +191,7 @@ def main():
     
     # Load data
     @st.cache_data
-    def get_data(v="1.8"):
+    def get_data(v="1.9"):
         df = load_mock_data()
         # Initialiser le pipeline de sentiment (CamemBERT / BERT)
         sentiment_pipeline = NewsSentimentPipeline()
@@ -209,7 +209,7 @@ def main():
         df = sentiment_pipeline.merge_with_opcvm(df, df_agg)
         return df, df_news
     
-    df, df_news = get_data(v="1.8")
+    df, df_news = get_data(v="1.9")
     
     # Sidebar
     st.sidebar.header("Filtres")
@@ -572,62 +572,17 @@ def main():
             s3.metric("Articles Haussiers", f"{pos_news}")
             s4.metric("Articles Baissiers", f"{neg_news}")
 
-            # Réaction par thématique (Couche 5)
-            st.markdown("### Réaction de l'IA par Thématique")
-            t1, t2, t3 = st.columns(3)
-            
-            # BAM
-            bam_news = df_news[df_news['title'].str.contains('BAM|Bank Al-Maghrib|taux|monétaire', case=False)]
-            bam_s = bam_news['score_sentiment'].mean() if not bam_news.empty else 0
-            t1.metric("Politique Monétaire (BAM)", f"{bam_s:+.2f}", delta=None)
-            
-            # Obligations
-            bond_news = df_news[df_news['title'].str.contains('oblig|Bons du Trésor|dette', case=False)]
-            bond_s = bond_news['score_sentiment'].mean() if not bond_news.empty else 0
-            t2.metric("Marché Obligataire", f"{bond_s:+.2f}", delta=None)
-            
-            # Économie
-            eco_news = df_news[df_news['title'].str.contains('économie|pib|croissance|invest', case=False)]
-            eco_s = eco_news['score_sentiment'].mean() if not eco_news.empty else 0
-            t3.metric("Économie Générale", f"{eco_s:+.2f}", delta=None)
-
-            # IA Signal Section
-            st.markdown("### Signal de Trading IA (V5.1)")
-            
+            # IA Synthesis Report
+            st.markdown("### Rapport de Synthèse IA Complet")
             outlook = "FAVORABLE" if avg_s > 0.1 else "PRUDENT" if avg_s < -0.1 else "NEUTRE"
             bg_color = "#D4EDDA" if avg_s > 0.1 else "#F8D7DA" if avg_s < -0.1 else "#FFF3CD"
             text_color = "#155724" if avg_s > 0.1 else "#721C24" if avg_s < -0.1 else "#856404"
-
-            # Calcul du signal
-            if avg_s > 0.4:
-                signal_text = "ACHAT FORT"
-                signal_color = "#28A745"
-            elif avg_s > 0.1:
-                signal_text = "ACHAT"
-                signal_color = "#94D3A2"
-            elif avg_s < -0.4:
-                signal_text = "VENTE FORTE"
-                signal_color = "#DC3545"
-            elif avg_s < -0.1:
-                signal_text = "VENTE"
-                signal_color = "#F1948A"
-            else:
-                signal_text = "NEUTRE / HOLD"
-                signal_color = "#85929E"
             
-            st.markdown(f"""
-            <div style="text-align:center; padding:30px; border:3px solid {signal_color}; border-radius:15px; margin-bottom:20px;">
-                <h1 style="color:{signal_color}; margin-bottom:0; font-size:48px;">{signal_text}</h1>
-                <p style="color:#5D6D7E; font-size:18px;">Probabilité de succès estimée : <b>{70 + abs(int(avg_s*30))}%</b></p>
-                <small style="color:#AAB7B8;">Signal basé sur Médias24, Bloomberg, Reuters et Financial Times</small>
-            </div>
-            """, unsafe_allow_html=True)
-
             st.markdown(f"""
             <div style="background-color:{bg_color}; padding:20px; border-radius:10px; border-left: 5px solid {text_color};">
                 <h4 style="color:{text_color}; margin-top:0;">PERSPECTIVE DE MARCHÉ : {outlook}</h4>
                 <p style="color:{text_color};">
-                    L'analyse hybride (Sources Nationales + <b>Bloomberg/Reuters</b>) par <b>CamemBERT</b> 
+                    L'analyse par <b>CamemBERT</b> des flux d'actualités financières marocaines (Médias24, L'Économiste, MAP) 
                     révèle une tendance de fond <b>{outlook.lower()}</b>. <br><br>
                     <b>Impact par segment :</b><br>
                     - <b>Actions :</b> Sensibilité forte aux nouvelles de croissance PIB ({'Positive' if avg_s > 0 else 'Négative'}).<br>
@@ -686,6 +641,10 @@ def main():
         # Prepare data for the selected fund
         df_fund_hist = df_filtered[df_filtered['nom_fonds'] == selected_fund].copy()
         
+        # Le FeatureBuilder attend une colonne 'vl'
+        if 'vl_jour' in df_fund_hist.columns and 'vl' not in df_fund_hist.columns:
+            df_fund_hist = df_fund_hist.rename(columns={'vl_jour': 'vl'})
+            
         if len(df_fund_hist) < 60:
             st.warning("Historique insuffisant pour ce fonds (besoin d'au moins 60 jours pour le calcul des indicateurs techniques).")
         else:

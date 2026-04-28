@@ -35,10 +35,7 @@ TELEGRAM = {
 RSS_FEEDS = {
     'medias24': 'https://medias24.com/feed',
     'leconomiste': 'https://www.leconomiste.com/rss.xml',
-    'map': 'https://www.mapexpress.ma/feed',
-    'bloomberg': 'https://feeds.bloomberg.com/markets/news.rss',
-    'reuters': 'https://news.google.com/rss/search?q=site:reuters.com/business',
-    'ft': 'https://www.ft.com/world?format=rss'
+    'map': 'https://www.mapexpress.ma/feed'
 }
 
 # Délai entre requêtes web (secondes)
