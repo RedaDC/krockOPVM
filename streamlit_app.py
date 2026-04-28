@@ -23,6 +23,8 @@ except ImportError as e:
     render_macro_data_tab = None
 
 from src.news_sentiment_pipeline import NewsSentimentPipeline
+from src.streamlit_signal_tab import render_signal_tab
+from src.feature_builder import build_vl_features
 
 # Page configuration
 st.set_page_config(
@@ -283,7 +285,7 @@ def main():
     st.markdown("---")
     
     # Tabs
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Signaux de Trading", "Analyse Technique", "Prévisions IA", "Actualités & Sentiment", "Données Brutes", "Analyse Macro"])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["Signaux de Trading", "Analyse Technique", "Prévisions IA", "Actualités & Sentiment", "Données Brutes", "Analyse Macro", "Signal IA Avancé"])
     
     with tab1:
         st.subheader("Signaux de Trading du Jour")
@@ -677,6 +679,47 @@ def main():
         else:
             st.warning("Le module des données macro avancées n'est pas disponible.")
     
+    with tab7:
+        st.subheader("Moteur de Signal IA (Random Forest + Momentum + Macro)")
+        st.write("Sélectionnez le **Fonds** dans la barre latérale pour analyser son signal détaillé.")
+        
+        # Prepare data for the selected fund
+        df_fund_hist = df_filtered[df_filtered['nom_fonds'] == selected_fund].copy()
+        
+        if len(df_fund_hist) < 60:
+            st.warning("Historique insuffisant pour ce fonds (besoin d'au moins 60 jours pour le calcul des indicateurs techniques).")
+        else:
+            # Get macro data from session state
+            df_macro_data = st.session_state.get("macro_dataset")
+            
+            # Build features
+            try:
+                df_feat = build_vl_features(df_fund_hist, df_macro_data).dropna()
+                
+                # Determine asset class from classification
+                fund_class_raw = str(df_fund_hist['classification'].iloc[-1]).lower()
+                if "action" in fund_class_raw:
+                    asset_class = "actions"
+                elif "oblig" in fund_class_raw:
+                    asset_class = "obligataire"
+                elif "monet" in fund_class_raw:
+                    asset_class = "monetaire"
+                else:
+                    asset_class = "diversifie"
+                
+                # Render the signal tab
+                if not df_feat.empty:
+                    render_signal_tab(
+                        df_features=df_feat, 
+                        df_macro=df_macro_data, 
+                        asset_class=asset_class, 
+                        fund_name=selected_fund
+                    )
+                else:
+                    st.warning("Pas assez de données après le calcul des moyennes mobiles longues (200j).")
+            except Exception as e:
+                st.error(f"Erreur lors du calcul des features : {e}")
+
     # Footer
     st.markdown("---")
     st.markdown(
