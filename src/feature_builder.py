@@ -23,7 +23,12 @@ def build_vl_features(df_vl: pd.DataFrame, df_macro: pd.DataFrame) -> pd.DataFra
     Retourne :
         DataFrame avec toutes les features prêtes pour le modèle
     """
-    df = df_vl.copy().set_index("date") if "date" in df_vl.columns else df_vl.copy()
+    df = df_vl.copy()
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"])
+        df = df.set_index("date")
+    elif not isinstance(df.index, pd.DatetimeIndex):
+        df.index = pd.to_datetime(df.index)
     df = df.sort_index()
 
     # ── Rendements ──────────────────────────────────────────────────
