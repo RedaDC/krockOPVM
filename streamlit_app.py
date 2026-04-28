@@ -592,6 +592,10 @@ def main():
             # IA Signal Section
             st.markdown("### Signal de Trading IA (V5.1)")
             
+            outlook = "FAVORABLE" if avg_s > 0.1 else "PRUDENT" if avg_s < -0.1 else "NEUTRE"
+            bg_color = "#D4EDDA" if avg_s > 0.1 else "#F8D7DA" if avg_s < -0.1 else "#FFF3CD"
+            text_color = "#155724" if avg_s > 0.1 else "#721C24" if avg_s < -0.1 else "#856404"
+
             # Calcul du signal
             if avg_s > 0.4:
                 signal_text = "ACHAT FORT"
