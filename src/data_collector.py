@@ -238,19 +238,13 @@ def _get_stooq_index(col: str) -> pd.DataFrame:
 
 # ── 4. Flux ASFIM ───────────────────────────────────────────────────────────────
 
-def load_asfim_vl(filepath: str | Path) -> pd.DataFrame:
+def load_asfim_vl(filepath: str | Path, original_filename: str = "") -> pd.DataFrame:
     """
     Charge un fichier ASFIM (Excel ou CSV) exporté depuis asfim.ma.
     Gère automatiquement les en-têtes décalés et les formats communs.
-
-    Colonnes attendues (flexibles) :
-        - date / Date / DATE
-        - vl / VL / valeur_liquidative / Valeur Liquidative
-        - fonds / Fonds / nom_fonds
-        - classe / Classe / categorie
     """
     filepath = Path(filepath)
-    log.info(f"Chargement ASFIM : {filepath}")
+    log.info(f"Chargement ASFIM : {filepath} (Original: {original_filename})")
 
     if not filepath.exists():
         raise FileNotFoundError(f"Fichier introuvable : {filepath}")
@@ -260,6 +254,30 @@ def load_asfim_vl(filepath: str | Path) -> pd.DataFrame:
         df_raw = pd.read_excel(filepath, header=None)
     else:
         df_raw = pd.read_csv(filepath, header=None, sep=None, engine="python")
+
+    # Tentative d'extraction de la date depuis les premières lignes
+    extracted_date = None
+    import re
+    for i in range(min(5, len(df_raw))):
+        for val in df_raw.iloc[i].dropna().astype(str):
+            match = re.search(r'(\d{2})[-/](\d{2})[-/](\d{4})', val)
+            if match:
+                d, m, y = match.groups()
+                extracted_date = f"{y}-{m}-{d}"
+                break
+        if extracted_date:
+            break
+            
+    # Si pas trouvé, chercher dans le nom de fichier
+    if not extracted_date and original_filename:
+        date_match = re.search(r'(\d{2})[_\s-]([a-zA-Z]+|\d{2})[_\s-](\d{4})', original_filename)
+        if date_match:
+            day, month, year = date_match.groups()
+            months = {'janvier': '01', 'fevrier': '02', 'mars': '03', 'avril': '04', 'mai': '05', 'juin': '06', 
+                      'juillet': '07', 'aout': '08', 'septembre': '09', 'octobre': '10', 'novembre': '11', 'decembre': '12',
+                      'février': '02', 'décembre': '12', 'août': '08'}
+            month = months.get(month.lower(), month)
+            extracted_date = f"{year}-{month}-{day}"
 
     # Détection automatique de la ligne d'en-têtes
     header_row = _detect_header_row(df_raw)
@@ -271,6 +289,13 @@ def load_asfim_vl(filepath: str | Path) -> pd.DataFrame:
         df = pd.read_csv(filepath, header=header_row, sep=None, engine="python")
 
     df = _normalize_asfim_columns(df)
+    
+    # Injecter la date extraite si manquante
+    if "date" not in df.columns and extracted_date:
+        df["date"] = extracted_date
+    elif "date" not in df.columns:
+        df["date"] = datetime.today().strftime('%Y-%m-%d')
+        
     df = df.dropna(subset=["date", "vl"])
     df["date"] = pd.to_datetime(df["date"], dayfirst=True, errors="coerce")
     df["vl"] = pd.to_numeric(df["vl"], errors="coerce")
@@ -282,10 +307,11 @@ def load_asfim_vl(filepath: str | Path) -> pd.DataFrame:
 
 def _detect_header_row(df_raw: pd.DataFrame) -> int:
     """Détecte la ligne contenant les en-têtes dans un fichier ASFIM brut."""
-    keywords = {"date", "vl", "fonds", "valeur", "liquidative", "nom", "classe"}
-    for i, row in df_raw.iterrows():
-        row_lower = [str(v).lower().strip() for v in row.values]
-        if len(keywords & set(row_lower)) >= 2:
+    keywords = {"date", "vl", "fonds", "valeur", "liquidative", "nom", "classe", "opcvm", "isin"}
+    for i in range(min(20, len(df_raw))):
+        row_lower = [str(v).lower().strip() for v in df_raw.iloc[i].values]
+        matches = keywords.intersection(set(row_lower))
+        if len(matches) >= 2 or "opcvm" in matches or "isin" in matches or "vl" in matches:
             return i
     return 0
 
@@ -295,13 +321,13 @@ def _normalize_asfim_columns(df: pd.DataFrame) -> pd.DataFrame:
     col_map = {}
     for col in df.columns:
         col_lower = str(col).lower().strip()
-        if any(k in col_lower for k in ["date", "jour"]):
+        if col_lower in ["date", "jour", "date_vl", "date de valeur"]:
             col_map[col] = "date"
-        elif any(k in col_lower for k in ["vl", "liquidative", "nav"]):
+        elif any(k in col_lower for k in ["vl", "liquidative", "nav"]) and "périodicité" not in col_lower:
             col_map[col] = "vl"
-        elif any(k in col_lower for k in ["fonds", "fund", "nom", "opcvm"]):
+        elif any(k in col_lower for k in ["fonds", "fund", "nom", "opcvm"]) and "nombre" not in col_lower:
             col_map[col] = "fonds"
-        elif any(k in col_lower for k in ["classe", "catégor", "categor", "type"]):
+        elif any(k in col_lower for k in ["classe", "catégor", "categor", "type", "nature", "classification"]):
             col_map[col] = "classe"
         elif any(k in col_lower for k in ["aum", "actif", "encours"]):
             col_map[col] = "aum"

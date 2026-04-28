@@ -61,7 +61,7 @@ def render_macro_data_tab():
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                 tmp.write(asfim_file.read())
                 tmp_path = tmp.name
-            df_asfim = load_asfim_vl(tmp_path)
+            df_asfim = load_asfim_vl(tmp_path, original_filename=asfim_file.name)
             os.unlink(tmp_path)
             st.success(f"✅ ASFIM chargé : {len(df_asfim):,} lignes, {df_asfim['fonds'].nunique()} fonds")
         except Exception as e:
