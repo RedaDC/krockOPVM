@@ -15,6 +15,11 @@ import os
 # Add src to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from src.macro_prediction import MacroPredictor
+try:
+    from pages.macro_data_page import render_macro_data_tab
+except ImportError as e:
+    st.error(f"Impossible de charger la page macro : {e}")
+    render_macro_data_tab = None
 
 # Page configuration
 st.set_page_config(
@@ -244,7 +249,7 @@ def main():
     st.markdown("---")
     
     # Tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["Signaux de Trading", "Analyse Technique", "Prédictions Macro", "Donnees Brutes"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Signaux de Trading", "Analyse Technique", "Prédictions Macro", "Donnees Brutes", "Données Macro (Avancé)"])
     
     with tab1:
         st.subheader("Signaux de Trading du Jour")
@@ -492,6 +497,12 @@ def main():
             file_name=f"opcvm_data_{datetime.now().strftime('%Y%m%d')}.csv",
             mime="text/csv"
         )
+        
+    with tab5:
+        if render_macro_data_tab is not None:
+            render_macro_data_tab()
+        else:
+            st.warning("Le module des données macro avancées n'est pas disponible.")
     
     # Footer
     st.markdown("---")
