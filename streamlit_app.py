@@ -25,6 +25,7 @@ except ImportError as e:
 from src.news_sentiment_pipeline import NewsSentimentPipeline
 from src.streamlit_signal_tab import render_signal_tab
 from src.feature_builder import build_vl_features
+from src.historical_accumulator import get_accumulator
 
 # Page configuration
 st.set_page_config(
@@ -420,6 +421,19 @@ def main():
         
         uploaded_file = st.file_uploader("Fichier Historique (CSV/Excel)", type=["csv", "xlsx"])
         
+        # Initialize historical accumulator
+        accumulator = get_accumulator()
+        
+        # Show historical data summary
+        hist_summary = accumulator.get_summary()
+        if hist_summary['total_days'] > 0:
+            st.success(f"📊 Historique disponible: **{hist_summary['total_days']} jours** | **{hist_summary['total_funds']} fonds** | {hist_summary['date_range']}")
+            
+            col_h1, col_h2, col_h3 = st.columns(3)
+            col_h1.metric("Jours de données", hist_summary['total_days'])
+            col_h2.metric("Fonds avec 5+ jours", hist_summary['funds_with_enough_data'])
+            col_h3.metric("Fonds avec 40+ jours", hist_summary['funds_with_40days'])
+        
         # Traitement du fichier avant l'affichage des colonnes pour récupérer la liste des fonds
         if uploaded_file is not None:
             try:
@@ -463,12 +477,32 @@ def main():
                     st.warning(f"Le fichier uploadé ne contient pas les colonnes requises ({', '.join(missing)}). Utilisation des données par défaut.")
                     df_to_predict = df_filtered.copy()
                 else:
-                    df_to_predict = df_asfim.copy()
+                    # Add to historical accumulator
+                    st.info("💾 Ajout des données à l'historique...")
+                    success = accumulator.add_daily_data(df_asfim[['date', 'nom_fonds', 'classification', 'vl_jour']])
+                    
+                    if success:
+                        st.success(f"✅ Données ajoutées pour le {df_asfim['date'].iloc[0].strftime('%d/%m/%Y')}")
+                        # Reload historical data
+                        df_hist = accumulator.get_historical_data(min_days=1)
+                        if not df_hist.empty:
+                            df_to_predict = df_hist
+                            st.info(f"📈 Maintenant vous avez **{df_hist['date'].nunique()} jours** d'historique")
+                        else:
+                            df_to_predict = df_asfim.copy()
+                    else:
+                        st.warning("Impossible d'ajouter les données à l'historique")
+                        df_to_predict = df_asfim.copy()
             except Exception as e:
                 st.error(f"Erreur de lecture: {e}")
                 df_to_predict = df_filtered.copy()
         else:
-            df_to_predict = df_filtered.copy()
+            # Load historical data if available
+            df_hist = accumulator.get_historical_data(min_days=1)
+            if not df_hist.empty:
+                df_to_predict = df_hist
+            else:
+                df_to_predict = df_filtered.copy()
         
         col_m1, col_m2 = st.columns([1, 2])
         
