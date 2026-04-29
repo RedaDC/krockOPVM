@@ -39,6 +39,7 @@ from src.stable_prediction_display import (
     run_prediction_with_validation,
     save_predictions_to_state
 )
+from src.telegram_prediction_bot import send_predictions_to_telegram
 
 # Page configuration
 st.set_page_config(
