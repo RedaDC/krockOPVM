@@ -33,6 +33,12 @@ from src.feature_builder import build_vl_features
 from src.historical_accumulator import get_accumulator
 from src.ai_reasoning_engine import get_ai_reasoning_engine
 from src.enhanced_predictor import get_enhanced_predictor
+from src.stable_prediction_display import (
+    initialize_prediction_state,
+    display_stable_predictions,
+    run_prediction_with_validation,
+    save_predictions_to_state
+)
 
 # Page configuration
 st.set_page_config(
