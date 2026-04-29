@@ -543,19 +543,44 @@ def main():
                         st.markdown(f"---")
                         st.markdown(f"### Focus Détail : {selected_fund_macro}")
                         df_fund_hist = df_to_predict[df_to_predict['nom_fonds'] == selected_fund_macro].copy()
-                        adv_predictor.train_and_evaluate(df_fund_hist) # Re-train for chart if needed or cache
-                        df_pred_v2 = adv_predictor.predict_future(df_fund_hist)
-                        df_fund_hist['type'] = 'Historique'
-                        df_plot = pd.concat([df_fund_hist, df_pred_v2]).sort_values('date')
                         
-                        fig = px.line(df_plot, x='date', y='vl_jour', color='type',
-                                      title=f"Trajectoire IA détaillée - {selected_fund_macro}",
-                                      color_discrete_map={"Historique": "blue", "Prediction V2": "green"},
-                                      line_dash='type')
-                        fig.update_layout(height=450, hovermode='x unified')
-                        st.plotly_chart(fig, use_container_width=True)
+                        # Try to train and predict with fallback
+                        try:
+                            metrics, error = adv_predictor.train_and_evaluate(df_fund_hist)
+                            
+                            if error:
+                                st.warning(f"⚠️ Entraînement ML impossible: {error}")
+                                st.info("💡 Utilisation de la méthode de fallback (tendance recente)")
+                            
+                            df_pred_v2 = adv_predictor.predict_future(df_fund_hist)
+                            
+                            if df_pred_v2.empty:
+                                st.error("❌ Impossible de générer des prédictions. Vérifiez que le fonds a suffisamment de données historiques (minimum 40 jours).")
+                            else:
+                                df_fund_hist['type'] = 'Historique'
+                                df_plot = pd.concat([df_fund_hist, df_pred_v2]).sort_values('date')
+                                
+                                fig = px.line(df_plot, x='date', y='vl_jour', color='type',
+                                              title=f"Trajectoire IA détaillée - {selected_fund_macro}",
+                                              color_discrete_map={"Historique": "blue", "Prediction V2": "green", "Prediction (Fallback)": "orange"},
+                                              line_dash='type')
+                                fig.update_layout(height=450, hovermode='x unified')
+                                st.plotly_chart(fig, use_container_width=True)
+                                
+                                # Show prediction type
+                                pred_type = df_pred_v2['type'].iloc[0] if not df_pred_v2.empty else 'Unknown'
+                                if 'Fallback' in str(pred_type):
+                                    st.info("📊 Note: Prédictions générées par analyse de tendance (fallback) car le modèle ML n'a pas pu être entraîné.")
+                        except Exception as e:
+                            st.error(f"❌ Erreur lors de la prédiction: {str(e)}")
+                            st.info("💡 Conseil: Vérifiez que le fonds sélectionné a au moins 40 jours de données historiques.")
                 else:
-                    st.error("Aucune prédiction n'a pu être générée. Vérifiez l'historique des données.")
+                    st.error("❌ Aucune prédiction n'a pu être générée.")
+                    st.warning("**Causes possibles:**")
+                    st.write("• Historique de données insuffisant (< 40 jours)")
+                    st.write("• Données de prix manquantes ou invalides")
+                    st.write("• Aucun fonds sélectionné")
+                    st.info("**Solution:** Importez le fichier ASFIM le plus récent ou vérifiez la qualité des données.")
 
     with tab4:
         st.subheader("Analyse de Sentiment IA (Couche 5)")
