@@ -26,9 +26,9 @@ LSTM_CONFIG = {
 
 # Configuration Telegram
 TELEGRAM = {
-    'token': "YOUR_BOT_TOKEN",  # Obtenir via @BotFather
-    'chat_id': "YOUR_CHAT_ID",
-    'report_time': "18:00"
+    'token': '8702694582:AAHp0VEX6JhYlUzvn2MViWqBj7FrMRKQpVs',
+    'chat_id': '5334121900',
+    'report_time': '18:00'
 }
 
 # Flux RSS actualités marocaines

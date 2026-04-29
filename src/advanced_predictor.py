@@ -195,6 +195,13 @@ class AdvancedPredictor:
         current_vl = df_vl[vl_col].iloc[-1]
         last_date = df_vl["date"].iloc[-1]
         
+        # Ensure last_date is a datetime object
+        if isinstance(last_date, str):
+            last_date = pd.to_datetime(last_date)
+        elif not hasattr(last_date, 'weekday'):
+            # If it's already a datetime or timestamp, convert to ensure compatibility
+            last_date = pd.to_datetime(last_date)
+        
         predictions = []
         for i in range(1, days_ahead + 1):
             next_date = last_date + timedelta(days=i)

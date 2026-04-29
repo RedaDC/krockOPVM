@@ -534,6 +534,13 @@ def main():
             selected_fund_macro = st.selectbox("Fonds focus (pour graphique)", options=macro_funds, index=default_idx if macro_funds else 0)
             
             predict_all = st.checkbox("Prédire pour toute la catégorie", value=False)
+
+            # Telegram notification option
+            send_telegram = st.checkbox(
+                "Envoyer le rapport à Telegram",
+                value=False,
+                help="Envoie les prédictions détaillées avec justifications à votre bot Telegram"
+            )
             
             st.markdown("### 2. Paramètres Macro")
             taux_bam = st.number_input("Taux Directeur BAM (%)", value=2.75, step=0.25)
@@ -624,6 +631,33 @@ def main():
                         
                         progress_bar.progress((i + 1) / len(funds_to_process))
                 
+
+                # Send to Telegram if checkbox is checked
+                if send_telegram and all_results:
+                    st.info("Envoi du rapport à Telegram...")
+                    try:
+                        metadata = {
+                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            'funds_processed': len(all_results),
+                            'macro_params': {
+                                'taux_bam': taux_bam,
+                                'courbe_taux': courbe_taux
+                            }
+                        }
+                        
+                        success = send_predictions_to_telegram(
+                            prediction_results=all_results,
+                            metadata=metadata,
+                            send_detailed=True
+                        )
+                        
+                        if success:
+                            st.success("✅ Rapport envoyé à Telegram avec succès!")
+                        else:
+                            st.error("❌ Échec de l'envoi à Telegram")
+                    except Exception as e:
+                        st.error(f"❌ Erreur envoi Telegram: {e}")
+
                 if all_results:
                     st.markdown("### Tableau de Performance Prévisionnelle (IA)")
                     
