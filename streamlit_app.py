@@ -26,6 +26,7 @@ from src.news_sentiment_pipeline import NewsSentimentPipeline
 from src.streamlit_signal_tab import render_signal_tab
 from src.feature_builder import build_vl_features
 from src.historical_accumulator import get_accumulator
+from src.ai_reasoning_engine import get_ai_reasoning_engine
 
 # Page configuration
 st.set_page_config(
@@ -571,14 +572,39 @@ def main():
                             pred_type = df_pred_v2['type'].iloc[0] if 'type' in df_pred_v2.columns else 'ML'
                             reliability = metrics['dir_accuracy'] if metrics and not error else 0.5
                             
+                            # Generate AI reasoning analysis
+                            try:
+                                reasoning_engine = get_ai_reasoning_engine()
+                                macro_data = {
+                                    'bam_rate': taux_bam,
+                                    'yield_curve': 'normal' if 'Stable' in courbe_taux else ('steep' if 'Hausse' in courbe_taux else 'flat')
+                                }
+                                sentiment_score = df_fund_hist['score_sentiment_moyen_jour'].iloc[-1] if 'score_sentiment_moyen_jour' in df_fund_hist.columns else 0
+                                
+                                ai_analysis = reasoning_engine.analyze_prediction(
+                                    df_fund_hist=df_fund_hist,
+                                    prediction_value=pred_vl,
+                                    current_vl=last_vl,
+                                    prediction_type='fallback' if error else 'ml',
+                                    macro_data=macro_data,
+                                    sentiment_data={'score': sentiment_score, 'article_count': 0}
+                                )
+                            except Exception as e:
+                                log.warning(f"AI reasoning failed for {fund_name}: {e}")
+                                ai_analysis = None
+                            
                             all_results.append({
                                 "Produit": fund_name,
                                 "VL Actuelle": last_vl,
                                 "VL Cible (30j)": round(pred_vl, 2),
                                 "Performance Attendue (%)": round(perf_30j, 2),
+                                "Signal": ai_analysis['signal'] if ai_analysis else 'NEUTRAL',
+                                "Conviction": ai_analysis['conviction'] if ai_analysis else 'LOW',
                                 "Fiabilité (Accuracy)": f"{reliability*100:.1f}%",
-                                "Score Sentiment": df_fund_hist['score_sentiment_moyen_jour'].iloc[-1] if 'score_sentiment_moyen_jour' in df_fund_hist.columns else 0,
-                                "Méthode": "ML Avancé" if not error else "Fallback (Tendance)"
+                                "Confiance IA": f"{ai_analysis['confidence_level']:.0f}%" if ai_analysis else 'N/A',
+                                "Score Sentiment": sentiment_score,
+                                "Méthode": "ML Avancé" if not error else "Fallback (Tendance)",
+                                "AI_Analysis": ai_analysis  # Store full analysis for detailed view
                             })
                         else:
                             st.error(f"❌ {fund_name}: Impossible de générer des prédictions")
@@ -587,10 +613,13 @@ def main():
                 
                 if all_results:
                     st.markdown("### Tableau de Performance Prévisionnelle (IA)")
-                    df_res = pd.DataFrame(all_results).sort_values("Performance Attendue (%)", ascending=False)
+                    
+                    # Create display dataframe without AI_Analysis column
+                    df_display = pd.DataFrame(all_results).drop(columns=['AI_Analysis'])
+                    df_display = df_display.sort_values("Performance Attendue (%)", ascending=False)
                                     
                     # Style the dataframe
-                    styled_df = df_res.style.background_gradient(
+                    styled_df = df_display.style.background_gradient(
                         subset=["Performance Attendue (%)"], 
                         cmap="RdYlGn"
                     )
@@ -598,53 +627,86 @@ def main():
                     st.dataframe(styled_df, use_container_width=True)
                                     
                     # Show summary
-                    ml_count = len(df_res[df_res['Méthode'] == 'ML Avancé'])
-                    fallback_count = len(df_res[df_res['Méthode'] == 'Fallback (Tendance)'])
+                    ml_count = len(df_display[df_display['Méthode'] == 'ML Avancé'])
+                    fallback_count = len(df_display[df_display['Méthode'] == 'Fallback (Tendance)'])
+                    bullish_count = len(df_display[df_display['Signal'].str.contains('BULLISH')])
+                    bearish_count = len(df_display[df_display['Signal'].str.contains('BEARISH')])
                                     
-                    col_s1, col_s2, col_s3 = st.columns(3)
-                    col_s1.metric("Total Fonds", len(df_res))
+                    col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns(5)
+                    col_s1.metric("Total Fonds", len(df_display))
                     col_s2.metric("Prédictions ML", ml_count)
                     col_s3.metric("Fallback (Tendance)", fallback_count)
+                    col_s4.metric("Signaux Haussiers", bullish_count)
+                    col_s5.metric("Signaux Baissiers", bearish_count)
                                     
                     if fallback_count > 0:
-                        st.info("ℹ️ Les prédictions Fallback utilisent l'analyse de tendance récente car l'historique est insuffisant pour le modèle ML (< 40 jours).")
+                        st.info("Les prédictions Fallback utilisent l'analyse de tendance récente car l'historique est insuffisant pour le modèle ML (< 40 jours).")
                     
-                    # Focus on specific fund chart
-                    if selected_fund_macro:
-                        st.markdown(f"---")
-                        st.markdown(f"### Focus Détail : {selected_fund_macro}")
-                        df_fund_hist = df_to_predict[df_to_predict['nom_fonds'] == selected_fund_macro].copy()
-                        
-                        # Try to train and predict with fallback
-                        try:
-                            metrics, error = adv_predictor.train_and_evaluate(df_fund_hist)
-                            
-                            if error:
-                                st.warning(f"⚠️ Entraînement ML impossible: {error}")
-                                st.info("💡 Utilisation de la méthode de fallback (tendance recente)")
-                            
-                            df_pred_v2 = adv_predictor.predict_future(df_fund_hist)
-                            
-                            if df_pred_v2.empty:
-                                st.error("❌ Impossible de générer des prédictions. Vérifiez que le fonds a suffisamment de données historiques (minimum 40 jours).")
-                            else:
-                                df_fund_hist['type'] = 'Historique'
-                                df_plot = pd.concat([df_fund_hist, df_pred_v2]).sort_values('date')
+                    # Detailed AI Reasoning for each fund
+                    st.markdown("---")
+                    st.markdown("### Analyse Détaillée par Fonds (AI Reasoning)")
+                    st.markdown("Cliquez sur un fonds pour voir l'analyse professionnelle complète avec raisonnement.")
+                    
+                    for result in all_results:
+                        ai_analysis = result.get('AI_Analysis')
+                        if ai_analysis:
+                            with st.expander(f"{result['Produit']} - {result['Signal']} ({result['Conviction']})"):
+                                # Display professional report
+                                st.markdown(f"**Signal:** {result['Signal']}")
+                                st.markdown(f"**Conviction:** {result['Conviction']}")
+                                st.markdown(f"**Rendement Attendu (30j):** {result['Performance Attendue (%)']:+.2f}%")
+                                st.markdown(f"**Confiance IA:** {result['Confiance IA']}")
+                                st.markdown("")
                                 
-                                fig = px.line(df_plot, x='date', y='vl_jour', color='type',
-                                              title=f"Trajectoire IA détaillée - {selected_fund_macro}",
-                                              color_discrete_map={"Historique": "blue", "Prediction V2": "green", "Prediction (Fallback)": "orange"},
-                                              line_dash='type')
-                                fig.update_layout(height=450, hovermode='x unified')
-                                st.plotly_chart(fig, use_container_width=True)
+                                # Key reasoning
+                                st.markdown("**Analyse et Raisonnement:**")
+                                st.write(ai_analysis['reasoning'])
+                                st.markdown("")
                                 
-                                # Show prediction type
-                                pred_type = df_pred_v2['type'].iloc[0] if not df_pred_v2.empty else 'Unknown'
-                                if 'Fallback' in str(pred_type):
-                                    st.info("📊 Note: Prédictions générées par analyse de tendance (fallback) car le modèle ML n'a pas pu être entraîné.")
-                        except Exception as e:
-                            st.error(f"❌ Erreur lors de la prédiction: {str(e)}")
-                            st.info("💡 Conseil: Vérifiez que le fonds sélectionné a au moins 40 jours de données historiques.")
+                                # Technical analysis
+                                st.markdown("**Analyse Technique:**")
+                                tech = ai_analysis['technical_analysis']
+                                col_t1, col_t2, col_t3 = st.columns(3)
+                                col_t1.metric("Tendance", tech['trend'])
+                                col_t2.metric("Momentum (10j)", f"{tech['momentum_10d']:+.2f}%")
+                                col_t3.metric("Volatilité", f"{tech['volatility_annual']:.2f}%")
+                                st.markdown("")
+                                
+                                # Macro analysis
+                                st.markdown("**Facteurs Macroéconomiques:**")
+                                macro = ai_analysis['macro_analysis']
+                                st.markdown(f"- **Taux BAM:** {macro['bam_rate']}% - {macro['bam_impact']}")
+                                st.markdown(f"- **Courbe des taux:** {macro['yield_curve_shape']} - {macro['yield_curve_impact']}")
+                                st.markdown("")
+                                
+                                # News sentiment
+                                st.markdown("**Sentiment des Actualités:**")
+                                sent = ai_analysis['sentiment_analysis']
+                                st.markdown(f"- **Sentiment global:** {sent['overall_sentiment']} (Score: {sent['sentiment_score']:+.3f})")
+                                st.markdown(f"- **Impact:** {sent['news_impact']}")
+                                st.markdown("")
+                                
+                                # Recommendation
+                                st.markdown("**Recommandation:**")
+                                rec = ai_analysis['recommendation']
+                                st.markdown(f"**Action:** {rec['action']}")
+                                st.markdown(f"**Justification:** {rec['rationale']}")
+                                st.markdown(f"**Guidance Liquidité:** {rec['liquidity_guidance']}")
+                                st.markdown("")
+                                st.markdown("**Points de Surveillance:**")
+                                for point in rec['monitoring_points']:
+                                    st.markdown(f"- {point}")
+                                st.markdown("")
+                                
+                                # Risk assessment
+                                st.markdown("**Évaluation des Risques:**")
+                                risk = ai_analysis['risk_assessment']
+                                st.markdown(f"- **Risque global:** {risk['overall_risk']}")
+                                st.markdown(f"- **Risque modèle:** {risk['model_risk']}")
+                                st.markdown(f"- **Risque données:** {risk['data_risk']}")
+                                if risk['historical_volatility'] > 0:
+                                    st.markdown(f"- **Volatilité historique:** {risk['historical_volatility']:.2f}%")
+
                 else:
                     st.error("❌ Aucune prédiction n'a pu être générée.")
                     st.warning("**Causes possibles:**")
