@@ -169,31 +169,28 @@ class TelegramPredictionBot:
         
         msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
         
-        # Justification
+        # Justification from AI reasoning
         msg += "*📝 JUSTIFICATION:*\n\n"
-        justification = result.get('Prediction_Justification', 'Non disponible')
+        reasoning = ai_analysis.get('reasoning', 'Non disponible')
+        if not reasoning or reasoning == 'Non disponible':
+            # Fallback to old field name
+            reasoning = result.get('Prediction_Justification', 'Non disponible')
         # Truncate if too long (Telegram limit)
-        if len(justification) > 800:
-            justification = justification[:800] + "..."
-        msg += f"{justification}\n\n"
+        if len(reasoning) > 800:
+            reasoning = reasoning[:800] + "..."
+        msg += f"{reasoning}\n\n"
         
         msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
         
-        # Technical Analysis
-        tech = ai_analysis.get('technical_analysis', {})
-        if tech:
+        # Technical Analysis (from AI reasoning engine)
+        if 'technical_summary' in ai_analysis:
             msg += "*📊 ANALYSE TECHNIQUE:*\n"
-            msg += f"• Tendance: {tech.get('trend', 'N/A')} ({tech.get('trend_strength', 'N/A')})\n"
-            msg += f"• Momentum (10j): {tech.get('momentum_10d', 0):+.2f}%\n"
-            msg += f"• Volatilité: {tech.get('volatility_annual', 0):.2f}%\n\n"
+            msg += f"{ai_analysis.get('technical_summary', 'N/A')}\n\n"
         
-        # Macro Analysis
-        macro = ai_analysis.get('macro_analysis', {})
-        if macro:
+        # Macro Analysis (from AI reasoning engine)
+        if 'macro_summary' in ai_analysis:
             msg += "*🏦 FACTEURS MACRO:*\n"
-            msg += f"• Taux BAM: {macro.get('bam_rate', 0)}%\n"
-            msg += f"• Impact BAM: {macro.get('bam_direction', 'N/A')}\n"
-            msg += f"• Courbe des taux: {macro.get('yield_curve_shape', 'N/A')}\n\n"
+            msg += f"{ai_analysis.get('macro_summary', 'N/A')}\n\n"
         
         # Sentiment
         sentiment = ai_analysis.get('sentiment_analysis', {})
@@ -204,21 +201,14 @@ class TelegramPredictionBot:
         
         msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
         
-        # Recommendation
-        rec = ai_analysis.get('recommendation', {})
-        if rec:
+        # Recommendation (from AI reasoning engine)
+        if 'recommendation' in ai_analysis:
             msg += "*💡 RECOMMANDATION:*\n"
-            msg += f"*Action:* {rec.get('action', 'N/A')}\n"
-            rationale = rec.get('rationale', '')
-            if len(rationale) > 300:
-                rationale = rationale[:300] + "..."
-            msg += f"*Justification:* {rationale}\n\n"
+            rec_action = ai_analysis.get('recommendation', 'N/A')
+            msg += f"*Action:* {rec_action}\n\n"
             
-            monitoring = rec.get('monitoring_points', [])
-            if monitoring:
-                msg += "*Points de surveillance:*\n"
-                for point in monitoring[:3]:  # Limit to 3 points
-                    msg += f"  - {point}\n"
+            if 'risk_assessment' in ai_analysis:
+                msg += f"*Risque:* {ai_analysis.get('risk_assessment', 'N/A')}\n\n"
         
         msg += "\n━━━━━━━━━━━━━━━━━━━━\n"
         msg += "⚠️ _Ce rapport est généré automatiquement. Ne constitue pas un conseil financier._"
