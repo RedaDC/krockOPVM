@@ -11,6 +11,11 @@ import io
 import plotly.express as px
 import sys
 import os
+import logging
+
+# Initialize logging
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("streamlit_app")
 
 # Add src to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -27,6 +32,7 @@ from src.streamlit_signal_tab import render_signal_tab
 from src.feature_builder import build_vl_features
 from src.historical_accumulator import get_accumulator
 from src.ai_reasoning_engine import get_ai_reasoning_engine
+from src.enhanced_predictor import get_enhanced_predictor
 
 # Page configuration
 st.set_page_config(
