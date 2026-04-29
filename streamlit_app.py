@@ -638,47 +638,195 @@ def main():
             s3.metric("Articles Haussiers", f"{pos_news}")
             s4.metric("Articles Baissiers", f"{neg_news}")
 
-            # IA Synthesis Report
+            # IA Synthesis Report - Enhanced with dynamic analysis
             st.markdown("### Rapport de Synthèse IA Complet")
-            outlook = "FAVORABLE" if avg_s > 0.1 else "PRUDENT" if avg_s < -0.1 else "NEUTRE"
-            bg_color = "#D4EDDA" if avg_s > 0.1 else "#F8D7DA" if avg_s < -0.1 else "#FFF3CD"
-            text_color = "#155724" if avg_s > 0.1 else "#721C24" if avg_s < -0.1 else "#856404"
+            
+            # Dynamic market outlook based on sentiment and macro data
+            if avg_s > 0.2:
+                outlook = "FAVORABLE (HAUSSIER)"
+                outlook_emoji = "📈"
+                bg_color = "#D4EDDA"
+                text_color = "#155724"
+                outlook_desc = "Les indicateurs sentimentaux sont positifs. Le marché bénéficie d'un environnement favorable."
+            elif avg_s > 0.05:
+                outlook = "MODÉRÉMENT FAVORABLE"
+                outlook_emoji = "📊"
+                bg_color = "#E8F5E9"
+                text_color = "#2E7D32"
+                outlook_desc = "Tendance légèrement positive avec des signaux encourageants mais prudents."
+            elif avg_s < -0.2:
+                outlook = "DÉFAVORABLE (BAISSIER)"
+                outlook_emoji = "📉"
+                bg_color = "#F8D7DA"
+                text_color = "#721C24"
+                outlook_desc = "Les indicateurs sont négatifs. Prudence recommandée face aux incertitudes."
+            elif avg_s < -0.05:
+                outlook = "MODÉRÉMENT DÉFAVORABLE"
+                outlook_emoji = "⚠️"
+                bg_color = "#FFF3CD"
+                text_color = "#856404"
+                outlook_desc = "Signaux légèrement négatifs nécessitant une surveillance accrue."
+            else:
+                outlook = "NEUTRE (ATTENTISME)"
+                outlook_emoji = "⚖️"
+                bg_color = "#FFF3CD"
+                text_color = "#856404"
+                outlook_desc = "Le marché est en phase d'attente. Aucun signal fort ne se détache."
+            
+            # Generate dynamic segment impact based on actual sentiment
+            if avg_s > 0.1:
+                actions_impact = "Positive - Les nouvelles économiques soutiennent les actions"
+                oblig_impact = "Neutre à Positive - Taux stables favorables"
+                monet_impact = "Neutre - Rendements stables attendus"
+            elif avg_s < -0.1:
+                actions_impact = "Négative - Incertitudes économiques pèsent sur les actions"
+                oblig_impact = "Positive - Valeur refuge en cas de volatilité"
+                monet_impact = "Positive - Demande pour la sécurité monétaire"
+            else:
+                actions_impact = "Neutre - Attentisme sur les actions"
+                oblig_impact = f"Réaction aux anticipations BAM (Taux à {taux_bam}%)"
+                monet_impact = "Stable - Impact limité par la volatilité actuelle"
             
             st.markdown(f"""
             <div style="background-color:{bg_color}; padding:20px; border-radius:10px; border-left: 5px solid {text_color};">
-                <h4 style="color:{text_color}; margin-top:0;">PERSPECTIVE DE MARCHÉ : {outlook}</h4>
+                <h3 style="color:{text_color}; margin-top:0;">{outlook_emoji} PERSPECTIVE DE MARCHÉ : {outlook}</h3>
+                <p style="color:{text_color}; font-size:16px;">
+                    {outlook_desc}
+                </p>
+                <hr style="border-color:{text_color}; opacity:0.3;">
+                <h4 style="color:{text_color};">📊 Impact par Segment :</h4>
+                <ul style="color:{text_color};">
+                    <li><b>🎯 Actions :</b> {actions_impact}</li>
+                    <li><b>📋 Obligataire :</b> {oblig_impact}</li>
+                    <li><b>💰 Monétaire :</b> {monet_impact}</li>
+                </ul>
+                <hr style="border-color:{text_color}; opacity:0.3;">
                 <p style="color:{text_color};">
-                    L'analyse par <b>CamemBERT</b> des flux d'actualités financières marocaines (Médias24, L'Économiste, MAP) 
-                    révèle une tendance de fond <b>{outlook.lower()}</b>. <br><br>
-                    <b>Impact par segment :</b><br>
-                    - <b>Actions :</b> Sensibilité forte aux nouvelles de croissance PIB ({'Positive' if avg_s > 0 else 'Négative'}).<br>
-                    - <b>Obligataire :</b> Réaction aux anticipations BAM (Taux à {taux_bam}%).<br>
-                    - <b>Monétaire :</b> Impact limité par la volatilité actuelle.
+                    <b>🤖 Méthodologie IA :</b> Analyse NLP avancée (CamemBERT + Keywords) de {len(df_news)} articles 
+                    provenant de Médias24, L'Économiste et MAP. Score moyen: <b>{avg_s:+.3f}</b>
                 </p>
             </div>
             """, unsafe_allow_html=True)
             
-            # Liste des articles
+            # Liste des articles avec analyse IA détaillée
             st.markdown("---")
-            st.markdown("### Détail des Actualités & Rapports par Article")
-            for _, article in df_news.iterrows():
+            st.markdown("### 🔍 Détail des Actualités & Analyse IA par Article")
+            
+            # Import HTML cleaning utility
+            import re
+            
+            for idx, article in df_news.iterrows():
                 sentiment_val = article['score_sentiment']
-                color = "green" if sentiment_val > 0 else "red" if sentiment_val < 0 else "orange"
                 
-                with st.expander(f"{article['title']} (Sentiment: {sentiment_val:+.2f})"):
-                    st.markdown(f"**Source :** {article['source']} | **Date :** {article['published']}")
-                    st.markdown(f"**Rapport de Contenu :**")
-                    st.write(article['summary'])
-                    st.markdown(f"**Analyse IA (CamemBERT) :**")
-                    if sentiment_val > 0.2:
-                        st.success(f"Signal HAUSSIER détecté avec une confiance de {abs(sentiment_val)*100:.1f}%")
-                    elif sentiment_val < -0.2:
-                        st.error(f"Signal BAISSIER détecté avec une confiance de {abs(sentiment_val)*100:.1f}%")
-                    else:
-                        st.warning(f"Signal NEUTRE ou INCERTAIN")
+                # Clean HTML tags from summary
+                raw_summary = article.get('summary', '')
+                clean_summary = re.sub(r'<[^>]+>', '', raw_summary)  # Remove HTML tags
+                clean_summary = re.sub(r'\s+', ' ', clean_summary).strip()  # Clean whitespace
+                
+                # Determine sentiment category
+                if sentiment_val > 0.3:
+                    sentiment_category = "TRÈS POSITIF"
+                    sentiment_emoji = "🟢🟢"
+                    ai_reaction = "L'IA détecte un fort signal haussier. Cet article contient des éléments très favorables pour le marché."
+                    confidence = "Haute"
+                elif sentiment_val > 0.1:
+                    sentiment_category = "POSITIF"
+                    sentiment_emoji = "🟢"
+                    ai_reaction = "L'IA identifie des signaux positifs. Impact favorable attendu sur les OPCVM actions et diversifiés."
+                    confidence = "Moyenne"
+                elif sentiment_val > 0.0:
+                    sentiment_category = "LÉGÈREMENT POSITIF"
+                    sentiment_emoji = "🟡"
+                    ai_reaction = "Sentiment légèrement optimiste. L'IA note des éléments encourageants mais sans fort impact."
+                    confidence = "Faible"
+                elif sentiment_val == 0.0:
+                    sentiment_category = "NEUTRE"
+                    sentiment_emoji = "⚪"
+                    ai_reaction = "Article neutre. L'IA ne détecte aucun signal directionnel significatif."
+                    confidence = "N/A"
+                elif sentiment_val > -0.1:
+                    sentiment_category = "LÉGÈREMENT NÉGATIF"
+                    sentiment_emoji = "🟠"
+                    ai_reaction = "L'IA perçoit des signaux de prudence. Surveillance recommandée pour les OPCVM actions."
+                    confidence = "Faible"
+                elif sentiment_val > -0.3:
+                    sentiment_category = "NÉGATIF"
+                    sentiment_emoji = "🔴"
+                    ai_reaction = "L'IA détecte des signaux baissiers. Impact négatif possible sur les actions, favorable aux obligations."
+                    confidence = "Moyenne"
+                else:
+                    sentiment_category = "TRÈS NÉGATIF"
+                    sentiment_emoji = "🔴🔴"
+                    ai_reaction = "Fort signal baissier détecté par l'IA. Prudence recommandée, potentiellement favorable aux OPCVM monétaires."
+                    confidence = "Haute"
+                
+                # Financial relevance score
+                financial_score = article.get('financial_score', 0)
+                
+                # Create expander with clean title
+                expander_title = f"{sentiment_emoji} [{sentiment_category}] {article['title']}"
+                
+                with st.expander(expander_title, expanded=False):
+                    # Metadata
+                    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+                    col_m1.metric("Source", article['source'])
+                    col_m2.metric("Score IA", f"{sentiment_val:+.3f}")
+                    col_m3.metric("Pertinence Fin.", f"{financial_score}/10")
+                    col_m4.metric("Confiance", confidence)
                     
-                    if article['link']:
-                        st.markdown(f"[Lire l'article complet]({article['link']})")
+                    # AI Analysis Box
+                    st.markdown("#### 🤖 Analyse IA Détaillée")
+                    
+                    # Color-coded sentiment box
+                    if sentiment_val > 0:
+                        box_color = "#D4EDDA"
+                        box_border = "#28A745"
+                    elif sentiment_val < 0:
+                        box_color = "#F8D7DA"
+                        box_border = "#DC3545"
+                    else:
+                        box_color = "#FFF3CD"
+                        box_border = "#FFC107"
+                    
+                    st.markdown(f"""
+                    <div style="background-color:{box_color}; padding:15px; border-radius:8px; border-left: 4px solid {box_border};">
+                        <b>Réaction de l'IA :</b> {ai_reaction}<br><br>
+                        <b>Catégorie :</b> {sentiment_category}<br>
+                        <b>Score :</b> {sentiment_val:+.3f} (sur une échelle de -1 à +1)<br>
+                        <b>Confiance :</b> {confidence}
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Article content (cleaned)
+                    st.markdown("#### 📄 Contenu de l'Article")
+                    st.markdown(f"**Source :** {article['source']} | **Date :** {article['published']}")
+                    
+                    if clean_summary:
+                        st.markdown(clean_summary)
+                    else:
+                        st.info("Aucun résumé disponible.")
+                    
+                    # Impact by fund type
+                    st.markdown("#### 📊 Impact Prévu par Type d'OPCVM")
+                    
+                    col_imp1, col_imp2, col_imp3 = st.columns(3)
+                    
+                    if sentiment_val > 0.1:
+                        col_imp1.success("Actions: ⬆️ Positif")
+                        col_imp2.info("Obligataire: ➡️ Neutre")
+                        col_imp3.info("Monétaire: ➡️ Neutre")
+                    elif sentiment_val < -0.1:
+                        col_imp1.error("Actions: ⬇️ Négatif")
+                        col_imp2.success("Obligataire: ⬆️ Refuge")
+                        col_imp3.success("Monétaire: ⬆️ Sécurité")
+                    else:
+                        col_imp1.info("Actions: ➡️ Neutre")
+                        col_imp2.info("Obligataire: ➡️ Neutre")
+                        col_imp3.info("Monétaire: ➡️ Neutre")
+                    
+                    # Link to full article
+                    if article.get('link'):
+                        st.markdown(f"🔗 [Lire l'article complet]({article['link']})")
         else:
             st.warning("Aucune actualité collectée pour le moment.")
 
