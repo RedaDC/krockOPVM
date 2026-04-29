@@ -512,31 +512,68 @@ def main():
                     
                     for i, fund_name in enumerate(funds_to_process):
                         df_fund_hist = df_to_predict[df_to_predict['nom_fonds'] == fund_name].copy()
+                        
+                        # Check if we have enough data
+                        if len(df_fund_hist) < 5:
+                            st.warning(f"⚠️ {fund_name}: Pas assez de données ({len(df_fund_hist)} jours, min 5 requis)")
+                            progress_bar.progress((i + 1) / len(funds_to_process))
+                            continue
+                        
+                        # Try to train, but ALWAYS predict (using fallback if needed)
                         metrics, error = adv_predictor.train_and_evaluate(df_fund_hist)
                         
-                        if not error:
-                            df_pred_v2 = adv_predictor.predict_future(df_fund_hist)
+                        if error:
+                            st.info(f"ℹ️ {fund_name}: {error} → Utilisation du mode fallback")
+                        
+                        # ALWAYS call predict_future - it has fallback built-in
+                        df_pred_v2 = adv_predictor.predict_future(df_fund_hist)
+                        
+                        if not df_pred_v2.empty:
                             last_vl = df_fund_hist['vl_jour'].iloc[-1]
                             pred_vl = df_pred_v2['vl_jour'].iloc[-1]
                             perf_30j = (pred_vl / last_vl - 1) * 100
                             
+                            # Determine prediction type
+                            pred_type = df_pred_v2['type'].iloc[0] if 'type' in df_pred_v2.columns else 'ML'
+                            reliability = metrics['dir_accuracy'] if metrics and not error else 0.5
+                            
                             all_results.append({
                                 "Produit": fund_name,
                                 "VL Actuelle": last_vl,
-                                "VL Cible (30j)": pred_vl,
+                                "VL Cible (30j)": round(pred_vl, 2),
                                 "Performance Attendue (%)": round(perf_30j, 2),
-                                "Fiabilité (Accuracy)": f"{metrics['dir_accuracy']*100:.1f}%",
-                                "Score Sentiment": df_fund_hist['score_sentiment_moyen_jour'].iloc[-1] if 'score_sentiment_moyen_jour' in df_fund_hist.columns else 0
+                                "Fiabilité (Accuracy)": f"{reliability*100:.1f}%",
+                                "Score Sentiment": df_fund_hist['score_sentiment_moyen_jour'].iloc[-1] if 'score_sentiment_moyen_jour' in df_fund_hist.columns else 0,
+                                "Méthode": "ML Avancé" if not error else "Fallback (Tendance)"
                             })
+                        else:
+                            st.error(f"❌ {fund_name}: Impossible de générer des prédictions")
                         
                         progress_bar.progress((i + 1) / len(funds_to_process))
                 
                 if all_results:
                     st.markdown("### Tableau de Performance Prévisionnelle (IA)")
                     df_res = pd.DataFrame(all_results).sort_values("Performance Attendue (%)", ascending=False)
-                    
-                    # Highlight top performance
-                    st.dataframe(df_res.style.background_gradient(subset=["Performance Attendue (%)"], cmap="RdYlGn"), use_container_width=True)
+                                    
+                    # Style the dataframe
+                    styled_df = df_res.style.background_gradient(
+                        subset=["Performance Attendue (%)"], 
+                        cmap="RdYlGn"
+                    )
+                                    
+                    st.dataframe(styled_df, use_container_width=True)
+                                    
+                    # Show summary
+                    ml_count = len(df_res[df_res['Méthode'] == 'ML Avancé'])
+                    fallback_count = len(df_res[df_res['Méthode'] == 'Fallback (Tendance)'])
+                                    
+                    col_s1, col_s2, col_s3 = st.columns(3)
+                    col_s1.metric("Total Fonds", len(df_res))
+                    col_s2.metric("Prédictions ML", ml_count)
+                    col_s3.metric("Fallback (Tendance)", fallback_count)
+                                    
+                    if fallback_count > 0:
+                        st.info("ℹ️ Les prédictions Fallback utilisent l'analyse de tendance récente car l'historique est insuffisant pour le modèle ML (< 40 jours).")
                     
                     # Focus on specific fund chart
                     if selected_fund_macro:
@@ -577,10 +614,14 @@ def main():
                 else:
                     st.error("❌ Aucune prédiction n'a pu être générée.")
                     st.warning("**Causes possibles:**")
-                    st.write("• Historique de données insuffisant (< 40 jours)")
-                    st.write("• Données de prix manquantes ou invalides")
-                    st.write("• Aucun fonds sélectionné")
-                    st.info("**Solution:** Importez le fichier ASFIM le plus récent ou vérifiez la qualité des données.")
+                    st.write("• **Historique insuffisant**: Tous les fonds ont < 5 jours de données")
+                    st.write("• **Données invalides**: Les valeurs de VL sont manquantes ou non numériques")
+                    st.write("• **Aucun fonds sélectionné**: Vérifiez votre sélection")
+                    st.info("**💡 Solutions:**")
+                    st.write("1. Importez le fichier ASFIM le plus récent (Excel)")
+                    st.write("2. Assurez-vous d'avoir au moins 5 jours de données par fonds")
+                    st.write("3. Pour de meilleures prédictions ML, visez 40+ jours d'historique")
+                    st.write("4. Vérifiez que les colonnes 'date' et 'vl_jour' sont présentes")
 
     with tab4:
         st.subheader("Analyse de Sentiment IA (Couche 5)")

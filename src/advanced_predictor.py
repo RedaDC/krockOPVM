@@ -169,6 +169,12 @@ class AdvancedPredictor:
             log.error("Insufficient data for even fallback prediction")
             return pd.DataFrame()
         
+        # Handle both 'vl' and 'vl_jour' column names
+        vl_col = 'vl' if 'vl' in df_vl.columns else 'vl_jour'
+        if vl_col not in df_vl.columns:
+            log.error("No VL column found (need 'vl' or 'vl_jour')")
+            return pd.DataFrame()
+        
         # Calculate recent momentum (last 20 days)
         recent_data = df_vl.tail(20)
         if len(recent_data) < 5:
@@ -176,7 +182,7 @@ class AdvancedPredictor:
         
         # Simple linear trend
         x = np.arange(len(recent_data))
-        y = recent_data["vl"].values
+        y = recent_data[vl_col].values
         
         # Calculate daily return trend
         if y[0] > 0:
@@ -186,7 +192,7 @@ class AdvancedPredictor:
             daily_trend = 0.0
         
         # Generate predictions
-        current_vl = df_vl["vl"].iloc[-1]
+        current_vl = df_vl[vl_col].iloc[-1]
         last_date = df_vl["date"].iloc[-1]
         
         predictions = []
