@@ -2,6 +2,9 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from scipy import stats
+import logging
+
+log = logging.getLogger("macro_prediction")
 
 class MacroPredictor:
     """
@@ -61,9 +64,13 @@ class MacroPredictor:
     def predict(self, df_history, taux_bam, courbe_taux, anticipations_text, days_ahead=30):
         """
         Generates predictions for the next `days_ahead`.
+        Enhanced with better error handling and more responsive macro adjustments.
         """
         if df_history.empty:
+            log.error("No history data provided for prediction")
             return pd.DataFrame()
+
+        log.info(f"Generating predictions for {len(df_history['nom_fonds'].unique())} funds, {days_ahead} days ahead")
 
         # BUG 1 FIX: Stable predictions with fixed seed
         np.random.seed(self.SEED)
@@ -79,6 +86,8 @@ class MacroPredictor:
             sentiment = df_history['score_sentiment_moyen_jour'].iloc[-1]
         else:
             sentiment = self._analyze_sentiment(anticipations_text)
+        
+        log.info(f"Sentiment score: {sentiment:.4f}")
         
         predictions = []
         
@@ -105,15 +114,19 @@ class MacroPredictor:
                 daily_momentum = (last_vl - first_vl) / first_vl / max(days_diff, 1)
             else:
                 daily_momentum = 0.0
+            
+            log.info(f"Fund: {fonds}, Daily momentum: {daily_momentum*100:.4f}%")
                 
-            # Get macro modifier
+            # Get macro modifier - INCREASED SENSITIVITY
             macro_modifier = self._get_macro_modifier(classification, taux_bam, courbe_taux, sentiment)
             
-            # Capping macro modifier to 0.05% as per request
-            macro_modifier = max(-0.0005, min(0.0005, macro_modifier))
+            # INCREASED: Capping macro modifier to 0.10% (was 0.05%)
+            macro_modifier = max(-0.001, min(0.001, macro_modifier))
             
-            # Weighting: 80% trend, 20% macro modifier
-            daily_drift = (daily_momentum * 0.8) + (macro_modifier * 0.2)
+            # IMPROVED: Weighting - 70% trend, 30% macro modifier (was 80/20)
+            daily_drift = (daily_momentum * 0.70) + (macro_modifier * 0.30)
+            
+            log.info(f"Macro modifier: {macro_modifier*100:.4f}%, Daily drift: {daily_drift*100:.4f}%")
             
             # Generate future data
             current_vl = last_vl
@@ -149,6 +162,7 @@ class MacroPredictor:
             predictions.extend(df_fonds.to_dict('records'))
             
         result_df = pd.DataFrame(predictions)
+        log.info(f"Generated {len(result_df[result_df['type']=='Prédiction'])} prediction records")
         return result_df.sort_values(['nom_fonds', 'date']).reset_index(drop=True)
 
     def get_prediction_summary(self, df_result):

@@ -26,6 +26,28 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import SENTIMENT_KEYWORDS, RSS_FEEDS, REQUEST_DELAY, IMPACT_KEYWORDS, POIDS_KEYWORDS, Poids_BERT
 
+# Enhanced financial market keywords for better filtering
+FINANCIAL_KEYWORDS = [
+    # Market indicators
+    "bourse", "masi", "madex", "casablanca", "indice", "cotation",
+    # OPCVM/Funds
+    "opcvm", "fonds", "gestion", "actif", "liquidative", "vl", "performance",
+    # Banking/Rates
+    "bank al-maghrib", "bam", "taux", "rate", "intérêt", "directeur", "bkam",
+    # Economic indicators
+    "pib", "gdp", "inflation", "chômage", "emploi", "croissance", "recession",
+    # Financial instruments
+    "obligation", "bond", "action", "stock", "dividende", "coupon",
+    # Market events
+    "hausse", "baisse", "rallye", "krach", "volatilité", "stable",
+    # Investment
+    "investissement", "investissement", "épargne", "flux", "souscription", "rachat",
+    # Companies & Banks
+    "bmce", "cdg", "wafa", "attijari", "cfg", "bank", "assurance",
+    # Government/Regulation
+    "ammc", "régulation", "finance", "budgétaire", "déficit", "debt"
+]
+
 
 class NewsSentimentPipeline:
     """Collecte et analyse le sentiment des actualités financières marocaines"""
@@ -75,11 +97,12 @@ class NewsSentimentPipeline:
     def collect_news_rss(self):
         """
         Collecte via flux RSS (Médias24, L'Économiste, MAP)
+        Enhanced to prioritize financial market news
         
         Returns:
             pd.DataFrame: Articles collectés
         """
-        print("\nCollecte des actualités via RSS...")
+        print("\nCollecte des actualités financières...")
         articles = []
         
         for source, url in RSS_FEEDS.items():
@@ -93,24 +116,25 @@ class NewsSentimentPipeline:
                     summary = entry.get('summary', '')
                     text_to_check = (title + ' ' + summary).lower()
                     
-                    # Score de pertinence
-                    match = any(kw.lower() in text_to_check for kw in self.keywords)
+                    # Enhanced scoring: count financial keyword matches
+                    financial_score = sum(1 for kw in FINANCIAL_KEYWORDS if kw.lower() in text_to_check)
                     
-                    if match or len(source_articles) < 5: # Garder au moins 5 articles même si pas de match
+                    # Keep articles with financial relevance score >= 2 OR top articles
+                    if financial_score >= 2 or len(source_articles) < 10:
                         source_articles.append({
                             'source': source,
                             'title': title,
                             'summary': summary[:2000],
                             'published': entry.get('published', datetime.now().isoformat()),
-                            'link': entry.get('link', '')
+                            'link': entry.get('link', ''),
+                            'financial_score': financial_score,
+                            'pertinent': financial_score >= 2
                         })
-                        if match: # Marquer si c'est un match financier
-                            source_articles[-1]['pertinent'] = True
-                        else:
-                            source_articles[-1]['pertinent'] = False
                 
+                # Sort by financial relevance
+                source_articles.sort(key=lambda x: x['financial_score'], reverse=True)
                 articles.extend(source_articles)
-                print(f"  {len(source_articles)} articles récupérés")
+                print(f"  {len(source_articles)} articles récupérés ({sum(1 for a in source_articles if a['pertinent'])} pertinents)")
                 time.sleep(REQUEST_DELAY)
                 
             except Exception as e:
@@ -118,11 +142,11 @@ class NewsSentimentPipeline:
         
         df = pd.DataFrame(articles)
         if not df.empty:
-            # Trier pour mettre les pertinents en haut
-            if 'pertinent' in df.columns:
-                df = df.sort_values(by='pertinent', ascending=False)
+            # Sort to put most financially relevant articles at top
+            df = df.sort_values(by='financial_score', ascending=False)
         
         print(f"\nTotal articles collectés: {len(df)}")
+        print(f"Articles financiers pertinents: {len(df[df['pertinent']==True])}")
         return df
     
     def detect_language(self, text):

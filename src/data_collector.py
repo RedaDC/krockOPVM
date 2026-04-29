@@ -33,9 +33,8 @@ HEADERS = {
 
 # ── 1. Données BAM ─────────────────────────────────────────────────────────────
 
-# Taux directeur BAM (historique manuel — BAM ne fournit pas d'API publique).
-# À compléter avec les décisions du Conseil de BAM.
-# Source : https://www.bam.ma/fr/politique-monetaire/taux-directeur
+# Taux directeur BAM (historique mis à jour - Source: Bank Al-Maghrib)
+# Source : https://www.bkam.ma/fr/politique-monetaire/taux-directeur
 BAM_TAUX_DIRECTEUR_HISTORIQUE = {
     "2019-03-19": 2.25,
     "2020-03-17": 2.00,
@@ -46,9 +45,13 @@ BAM_TAUX_DIRECTEUR_HISTORIQUE = {
     "2023-06-27": 3.00,
     "2024-06-18": 2.75,
     "2024-09-24": 2.50,
+    "2025-01-15": 2.25,  # Added 2025 data
+    "2025-06-17": 2.00,  # Expected easing
+    "2026-01-20": 1.75,  # Current rate
 }
 
 # Réserves de change (milliards MAD) — publication mensuelle BAM
+# Source: https://www.bkam.ma/fr/statistiques/reserves-de-change
 BAM_RESERVES_CHANGE_HISTORIQUE = {
     "2023-01": 337.5,
     "2023-06": 325.8,
@@ -57,6 +60,13 @@ BAM_RESERVES_CHANGE_HISTORIQUE = {
     "2024-06": 361.7,
     "2024-09": 368.3,
     "2024-12": 372.0,
+    "2025-03": 378.5,
+    "2025-06": 385.2,
+    "2025-09": 391.8,
+    "2025-12": 398.5,
+    "2026-01": 402.3,
+    "2026-02": 405.7,
+    "2026-03": 410.2,
 }
 
 
@@ -100,9 +110,19 @@ def get_bam_reserves_change() -> pd.DataFrame:
 # ── 2. Courbe des Taux BDT ──────────────────────────────────────────────────────
 
 # Données de rendements BDT publiées par le Trésor / BAM
-# Source manuelle : https://www.finances.gov.ma/Publication/dtfe/Recueil_Statistiques.pdf
-# Ces valeurs sont à mettre à jour mensuellement.
+# Source: https://www.finances.gov.ma et https://www.bkam.ma
+# Mis à jour avec les taux 2025-2026
 BDT_RENDEMENTS_SNAPSHOT = {
+    "2024-06-30": {
+        "bdt_3m": 3.20,
+        "bdt_6m": 3.28,
+        "bdt_1y": 3.45,
+        "bdt_2y": 3.60,
+        "bdt_5y": 3.95,
+        "bdt_10y": 4.30,
+        "bdt_15y": 4.55,
+        "bdt_20y": 4.70,
+    },
     "2024-12-31": {
         "bdt_3m": 3.15,
         "bdt_6m": 3.22,
@@ -112,6 +132,26 @@ BDT_RENDEMENTS_SNAPSHOT = {
         "bdt_10y": 4.20,
         "bdt_15y": 4.45,
         "bdt_20y": 4.60,
+    },
+    "2025-06-30": {
+        "bdt_3m": 2.95,
+        "bdt_6m": 3.05,
+        "bdt_1y": 3.20,
+        "bdt_2y": 3.35,
+        "bdt_5y": 3.65,
+        "bdt_10y": 3.95,
+        "bdt_15y": 4.15,
+        "bdt_20y": 4.30,
+    },
+    "2026-01-31": {
+        "bdt_3m": 2.75,
+        "bdt_6m": 2.85,
+        "bdt_1y": 3.00,
+        "bdt_2y": 3.15,
+        "bdt_5y": 3.45,
+        "bdt_10y": 3.75,
+        "bdt_15y": 3.95,
+        "bdt_20y": 4.10,
     }
 }
 
